@@ -1,6 +1,8 @@
 FROM postgres:16-alpine
 
-RUN apk add --no-cache aws-cli coreutils tzdata
+RUN apk upgrade --no-cache \
+    && apk add --no-cache aws-cli coreutils tzdata \
+    && rm -f /usr/local/bin/gosu
 
 COPY infra/deploy/backup/backup.sh /usr/local/bin/vivoo-backup
 COPY infra/deploy/backup/restore.sh /usr/local/bin/vivoo-restore
