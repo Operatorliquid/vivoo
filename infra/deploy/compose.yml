@@ -128,7 +128,7 @@ services:
     # The frontend is compiled in CI (or on the operator workstation) and only
     # the immutable static bundle is copied to the server. Building Vite on a
     # small production node can exhaust memory and interrupt live capture.
-    image: nginx:1.28-alpine
+    image: nginx:1.30.4-alpine3.24
     restart: unless-stopped
     depends_on:
       - api

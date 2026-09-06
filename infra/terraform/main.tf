@@ -28,10 +28,30 @@ locals {
   media_bucket    = "${local.resource_prefix}-media-${data.aws_caller_identity.current.account_id}"
 }
 
+data "aws_iam_policy_document" "media_kms" {
+  # KMS key policies require Resource="*" to mean the key carrying this policy;
+  # the principal is restricted to this AWS account's root identity.
+  #checkov:skip=CKV_AWS_109:This is the account-root administration statement required by the KMS key policy.
+  #checkov:skip=CKV_AWS_111:Resource star means only this KMS key in a key policy, not every AWS resource.
+  #checkov:skip=CKV_AWS_356:AWS KMS key-policy statements require Resource star to identify the attached key.
+  statement {
+    sid       = "EnableAccountAdministration"
+    effect    = "Allow"
+    actions   = ["kms:*"]
+    resources = ["*"]
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+  }
+}
+
 resource "aws_kms_key" "media" {
   description             = "CourtVision private media encryption"
   deletion_window_in_days = 30
   enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.media_kms.json
 }
 
 resource "aws_kms_alias" "media" {
@@ -39,7 +59,15 @@ resource "aws_kms_alias" "media" {
   target_key_id = aws_kms_key.media.key_id
 }
 
+# Application activity records provide the player-level media audit trail; raw
+# S3 access logs would duplicate it without identifying the business actor.
+# Processing is coordinated through authenticated API jobs, not S3 events.
+# The pilot is intentionally single-region; versioning and KMS protect the media
+# until cross-region disaster recovery is enabled for the production tier.
 resource "aws_s3_bucket" "media" {
+  #checkov:skip=CKV_AWS_18:Player-level access is audited by the application and direct public access is blocked.
+  #checkov:skip=CKV2_AWS_62:Media processing uses the durable application job queue rather than bucket notifications.
+  #checkov:skip=CKV_AWS_144:Cross-region replication is deferred to the production disaster-recovery tier.
   bucket = local.media_bucket
 }
 

@@ -40,7 +40,7 @@ with sync_playwright() as playwright:
     violations = blocking_violations(axe, page, "login")
 
     page.get_by_label("Email").fill(OWNER_EMAIL)
-    page.get_by_label("Contraseña").fill(OWNER_PASSWORD)
+    page.get_by_role("textbox", name="Contraseña", exact=True).fill(OWNER_PASSWORD)
     page.get_by_role("button", name="Entrar").click()
     expect(page.get_by_role("heading", name="Operación")).to_be_visible(timeout=10_000)
     page.wait_for_timeout(600)
