@@ -29,8 +29,6 @@ jobs:
             artifact: windows
     runs-on: ${{ matrix.os }}
     env:
-      CSC_LINK: ${{ matrix.artifact == 'macos' && secrets.MACOS_CSC_LINK || secrets.WINDOWS_CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ matrix.artifact == 'macos' && secrets.MACOS_CSC_KEY_PASSWORD || secrets.WINDOWS_CSC_KEY_PASSWORD }}
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -48,6 +46,19 @@ jobs:
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: 0.12.1
+      - name: Configure optional code signing
+        shell: bash
+        env:
+          VIVOO_CSC_LINK: ${{ matrix.artifact == 'macos' && secrets.MACOS_CSC_LINK || secrets.WINDOWS_CSC_LINK }}
+          VIVOO_CSC_KEY_PASSWORD: ${{ matrix.artifact == 'macos' && secrets.MACOS_CSC_KEY_PASSWORD || secrets.WINDOWS_CSC_KEY_PASSWORD }}
+        run: |
+          if [ -n "$VIVOO_CSC_LINK" ]; then
+            echo "CSC_LINK=$VIVOO_CSC_LINK" >> "$GITHUB_ENV"
+            echo "CSC_KEY_PASSWORD=$VIVOO_CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
+          else
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+            echo "No signing certificate configured; building an unsigned test installer."
+          fi
       - run: pnpm install --frozen-lockfile
       - run: uv python install 3.12
       - name: Package capture runtime
