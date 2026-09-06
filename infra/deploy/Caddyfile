@@ -11,5 +11,5 @@
         Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: http://127.0.0.1:8781 http://localhost:8781; media-src 'self' blob: {$S3_MEDIA_ORIGIN} http://127.0.0.1:8781 http://localhost:8781; connect-src 'self' http://127.0.0.1:8781 http://localhost:8781 ws://127.0.0.1:8781 ws://localhost:8781"
     }
 
-    reverse_proxy web:80
+    reverse_proxy web:8080
 }

@@ -11,6 +11,9 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @courtvision/frontend build
 
 FROM nginx:1.28-alpine
-COPY infra/deploy/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/apps/frontend/dist /usr/share/nginx/html
-EXPOSE 80
+RUN apk upgrade --no-cache \
+    && chown -R nginx:nginx /var/cache/nginx /var/run /etc/nginx/conf.d /usr/share/nginx/html
+COPY --chown=nginx:nginx infra/deploy/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --chown=nginx:nginx --from=build /app/apps/frontend/dist /usr/share/nginx/html
+EXPOSE 8080
+USER nginx

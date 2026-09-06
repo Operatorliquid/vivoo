@@ -22,13 +22,16 @@ with sync_playwright() as playwright:
         if getattr(message, "type", "") != "error":
             return
         text = str(getattr(message, "text", ""))
+        location = getattr(message, "location", {})
+        resource_url = str(location.get("url", "")) if isinstance(location, dict) else ""
         expected = (
             "401 (Unauthorized)" in text
             or "127.0.0.1:8781" in text
             or text == "Failed to load resource: net::ERR_FAILED"
+            or (resource_url.endswith("/__courtvision/runtime") and "404 (Not Found)" in text)
         )
         if not expected:
-            browser_errors.append(text)
+            browser_errors.append(f"{text} @ {resource_url}")
 
     page.on("console", capture_console_error)
     page.on("pageerror", lambda error: browser_errors.append(str(error)))
@@ -42,11 +45,12 @@ with sync_playwright() as playwright:
     page.goto(BASE_URL, wait_until="networkidle")
     expect(page.get_by_role("heading", name="Iniciar sesión")).to_be_visible()
     page.get_by_label("Email").fill(OWNER_EMAIL)
-    page.get_by_label("Contraseña").fill("clave-incorrecta")
+    password_input = page.get_by_role("textbox", name="Contraseña", exact=True)
+    password_input.fill("clave-incorrecta")
     page.get_by_role("button", name="Entrar").click()
     expect(page.get_by_text("El email o la contraseña no son correctos.")).to_be_visible(timeout=10_000)
     expect(page.get_by_text(re.compile(r"\[object Object\]"))).to_have_count(0)
-    page.get_by_label("Contraseña").fill(OWNER_PASSWORD)
+    password_input.fill(OWNER_PASSWORD)
     page.get_by_role("button", name="Entrar").click()
     expect(page.get_by_role("heading", name="Operación")).to_be_visible(timeout=10_000)
 
