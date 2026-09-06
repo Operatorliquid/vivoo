@@ -1,0 +1,453 @@
+openapi: 3.1.0
+info:
+  title: CourtVision Platform API
+  version: 0.1.0
+  description: Public QR/player, owner, capture-agent, and delivery boundaries for the MVP.
+servers:
+  - url: https://api.example.invalid
+tags:
+  - name: Public Player
+  - name: Owner
+  - name: Capture Agent
+  - name: Delivery
+paths:
+  /public/fields/{fieldToken}:
+    get:
+      tags: [Public Player]
+      summary: Resolve a field QR context
+      parameters:
+        - $ref: '#/components/parameters/FieldToken'
+      responses:
+        '200':
+          description: Club, venue, field, sport, and availability context.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FieldContext'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/fields/{fieldToken}/sessions:
+    post:
+      tags: [Public Player]
+      summary: Start or join the active session for a field
+      parameters:
+        - $ref: '#/components/parameters/FieldToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartSessionRequest'
+      responses:
+        '201':
+          description: Session created or joined.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionJoinResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /public/sessions/{sessionToken}/players:
+    post:
+      tags: [Public Player]
+      summary: Add a participant to an active session
+      parameters:
+        - $ref: '#/components/parameters/SessionToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerRegistration'
+      responses:
+        '201':
+          description: Player associated with the session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerJoinResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /public/access/{accessToken}:
+    get:
+      tags: [Public Player]
+      summary: Read a private player media page
+      parameters:
+        - $ref: '#/components/parameters/AccessToken'
+      responses:
+        '200':
+          description: Authorized session media summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerMediaPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '410':
+          description: Link expired or revoked.
+
+  /owner/clubs:
+    get:
+      tags: [Owner]
+      summary: List clubs visible to the authenticated owner identity
+      security:
+        - ownerAuth: []
+      responses:
+        '200':
+          description: Tenant-scoped clubs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Club'
+  /owner/media:
+    get:
+      tags: [Owner]
+      summary: Search owner media
+      security:
+        - ownerAuth: []
+      parameters:
+        - in: query
+          name: club_id
+          schema: { type: string, format: uuid }
+        - in: query
+          name: field_id
+          schema: { type: string, format: uuid }
+        - in: query
+          name: sport_code
+          schema: { type: string }
+        - in: query
+          name: player
+          schema: { type: string }
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: cursor
+          schema: { type: string }
+      responses:
+        '200':
+          description: Tenant-scoped paginated media results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaSearchResponse'
+  /owner/sessions/{sessionId}:
+    get:
+      tags: [Owner]
+      summary: Inspect a session and its media workflow
+      security:
+        - ownerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Session details, players, recordings, highlights, deliveries, and failures.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerSessionDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /owner/deliveries/{deliveryId}/retry:
+    post:
+      tags: [Owner]
+      summary: Retry a failed delivery
+      security:
+        - ownerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeliveryId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Retry queued.
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /agent/heartbeat:
+    post:
+      tags: [Capture Agent]
+      summary: Report camera agent health
+      security:
+        - agentAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HeartbeatRequest'
+      responses:
+        '204':
+          description: Health accepted.
+  /agent/sessions/{sessionId}/events:
+    post:
+      tags: [Capture Agent]
+      summary: Submit an idempotent normalized highlight event
+      security:
+        - agentAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaptureEventRequest'
+      responses:
+        '202':
+          description: Event accepted for clip processing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventAcceptedResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /agent/uploads/presign:
+    post:
+      tags: [Capture Agent]
+      summary: Request a short-lived upload target for a source segment or recording
+      security:
+        - agentAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresignUploadRequest'
+      responses:
+        '200':
+          description: Upload target and metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignUploadResponse'
+
+  /webhooks/whatsapp/status:
+    post:
+      tags: [Delivery]
+      summary: Receive provider delivery status updates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryStatusWebhook'
+      responses:
+        '204':
+          description: Status accepted.
+
+components:
+  securitySchemes:
+    ownerAuth:
+      type: http
+      scheme: bearer
+    agentAuth:
+      type: http
+      scheme: bearer
+    accessToken:
+      type: http
+      scheme: bearer
+  parameters:
+    FieldToken:
+      name: fieldToken
+      in: path
+      required: true
+      schema: { type: string }
+    SessionToken:
+      name: sessionToken
+      in: path
+      required: true
+      schema: { type: string }
+    AccessToken:
+      name: accessToken
+      in: path
+      required: true
+      schema: { type: string }
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DeliveryId:
+      name: deliveryId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8 }
+  responses:
+    Unauthorized:
+      description: Authentication or access token invalid.
+    NotFound:
+      description: Resource not found within the caller's scope.
+    Conflict:
+      description: Duplicate or conflicting active resource.
+    ValidationError:
+      description: Request data is invalid or consent is missing.
+  schemas:
+    FieldContext:
+      type: object
+      required: [field_id, club_name, field_name, sport_code, status]
+      properties:
+        field_id: { type: string, format: uuid }
+        club_name: { type: string }
+        venue_name: { type: string }
+        field_name: { type: string }
+        sport_code: { type: string }
+        status: { type: string, enum: [active, inactive, maintenance] }
+        active_session_id: { type: string, format: uuid, nullable: true }
+    StartSessionRequest:
+      type: object
+      required: [display_name, phone_e164, recording_consent, messaging_consent]
+      properties:
+        display_name: { type: string, minLength: 2, maxLength: 100 }
+        phone_e164: { type: string, pattern: '^\\+[1-9][0-9]{7,14}$' }
+        recording_consent: { type: boolean, const: true }
+        messaging_consent: { type: boolean }
+        policy_version: { type: string }
+    PlayerRegistration:
+      allOf:
+        - $ref: '#/components/schemas/StartSessionRequest'
+    SessionJoinResponse:
+      type: object
+      required: [session_id, session_token, field_name, sport_code, status]
+      properties:
+        session_id: { type: string, format: uuid }
+        session_token: { type: string }
+        field_name: { type: string }
+        sport_code: { type: string }
+        status: { type: string, enum: [pending, active] }
+    PlayerJoinResponse:
+      type: object
+      required: [session_id, player_id, access_token]
+      properties:
+        session_id: { type: string, format: uuid }
+        player_id: { type: string, format: uuid }
+        access_token: { type: string }
+    PlayerMediaPage:
+      type: object
+      required: [session, highlights]
+      properties:
+        session:
+          type: object
+          required: [id, club_name, field_name, sport_code, started_at]
+          properties:
+            id: { type: string, format: uuid }
+            club_name: { type: string }
+            field_name: { type: string }
+            sport_code: { type: string }
+            started_at: { type: string, format: date-time }
+            full_recording_url: { type: string, format: uri, nullable: true }
+        highlights:
+          type: array
+          items:
+            $ref: '#/components/schemas/HighlightSummary'
+    HighlightSummary:
+      type: object
+      required: [id, occurred_at, status]
+      properties:
+        id: { type: string, format: uuid }
+        occurred_at: { type: string, format: date-time }
+        duration_seconds: { type: integer }
+        status: { type: string, enum: [requested, processing, available, failed, expired, deleted] }
+        media_url: { type: string, format: uri, nullable: true }
+    Club:
+      type: object
+      required: [id, name, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        status: { type: string }
+    MediaSearchResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HighlightSummary'
+        next_cursor: { type: string, nullable: true }
+    OwnerSessionDetail:
+      type: object
+      required: [session, players, recordings, highlights, deliveries]
+      properties:
+        session: { type: object }
+        players: { type: array, items: { type: object } }
+        recordings: { type: array, items: { type: object } }
+        highlights: { type: array, items: { $ref: '#/components/schemas/HighlightSummary' } }
+        deliveries: { type: array, items: { type: object } }
+        failures: { type: array, items: { type: object } }
+    HeartbeatRequest:
+      type: object
+      required: [device_id, observed_at, camera_status, agent_version]
+      properties:
+        device_id: { type: string }
+        observed_at: { type: string, format: date-time }
+        camera_status: { type: string, enum: [online, offline, degraded] }
+        active_session_id: { type: string, format: uuid, nullable: true }
+        agent_version: { type: string }
+    CaptureEventRequest:
+      type: object
+      required: [source_id, event_type, occurred_at]
+      properties:
+        source_id: { type: string }
+        event_type: { type: string, enum: [gesture, manual, physical_button, automatic_sport_event] }
+        occurred_at: { type: string, format: date-time }
+        confidence: { type: number, minimum: 0, maximum: 1, nullable: true }
+        buffer_start_at: { type: string, format: date-time }
+        buffer_end_at: { type: string, format: date-time }
+        initiating_player_id: { type: string, format: uuid, nullable: true }
+        source_storage_key: { type: string, nullable: true }
+    EventAcceptedResponse:
+      type: object
+      required: [event_id, highlight_id, status]
+      properties:
+        event_id: { type: string, format: uuid }
+        highlight_id: { type: string, format: uuid }
+        status: { type: string, enum: [accepted, processing] }
+    PresignUploadRequest:
+      type: object
+      required: [session_id, media_type, content_type, size_bytes, checksum]
+      properties:
+        session_id: { type: string, format: uuid }
+        media_type: { type: string, enum: [segment, recording, highlight_source] }
+        content_type: { type: string }
+        size_bytes: { type: integer, minimum: 1 }
+        checksum: { type: string }
+    PresignUploadResponse:
+      type: object
+      required: [upload_url, storage_key, expires_at]
+      properties:
+        upload_url: { type: string, format: uri }
+        storage_key: { type: string }
+        expires_at: { type: string, format: date-time }
+    DeliveryStatusWebhook:
+      type: object
+      required: [provider_message_id, status, occurred_at]
+      properties:
+        provider_message_id: { type: string }
+        status: { type: string, enum: [sent, delivered, read, failed] }
+        occurred_at: { type: string, format: date-time }
+        error_code: { type: string, nullable: true }
+        error_message: { type: string, nullable: true }

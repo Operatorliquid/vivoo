@@ -1,0 +1,14 @@
+node_modules
+dist
+build
+.git
+.env
+*.log*
+__pycache__
+.pytest_cache
+.terraform
+*.pt
+.courtvision
+coverage
+playwright-report
+test-results

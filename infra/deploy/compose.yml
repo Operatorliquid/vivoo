@@ -1,0 +1,190 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: courtvision
+      POSTGRES_USER: courtvision
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U courtvision -d courtvision"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - courtvision_postgres:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql://courtvision:${POSTGRES_PASSWORD}@db:5432/courtvision
+      LOCAL_AGENT_SIGNING_SECRET: ${LOCAL_AGENT_SIGNING_SECRET:?LOCAL_AGENT_SIGNING_SECRET must be set}
+      LOCAL_WORKER_KEY: ${LOCAL_WORKER_KEY:?LOCAL_WORKER_KEY must be set}
+      OWNER_SESSION_SIGNING_SECRET: ${OWNER_SESSION_SIGNING_SECRET:?OWNER_SESSION_SIGNING_SECRET must be set}
+      OWNER_SESSION_TTL_HOURS: ${OWNER_SESSION_TTL_HOURS:-720}
+      BOOTSTRAP_OWNER_ID: ${BOOTSTRAP_OWNER_ID:-8f0e2f1a-1b21-4ef0-bd2a-2b1d5e540201}
+      BOOTSTRAP_OWNER_EMAIL: ${BOOTSTRAP_OWNER_EMAIL:-owner@courtvision.local}
+      BOOTSTRAP_OWNER_DISPLAY_NAME: ${BOOTSTRAP_OWNER_DISPLAY_NAME:-José Stratta}
+      BOOTSTRAP_OWNER_PASSWORD_HASH: ${BOOTSTRAP_OWNER_PASSWORD_HASH:-}
+      BOOTSTRAP_ADMIN_ID: ${BOOTSTRAP_ADMIN_ID:-tveo-platform-admin}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_DISPLAY_NAME: ${BOOTSTRAP_ADMIN_DISPLAY_NAME:-vivoo Admin}
+      BOOTSTRAP_ADMIN_PASSWORD_HASH: ${BOOTSTRAP_ADMIN_PASSWORD_HASH:-}
+      PLAYER_ACCESS_SIGNING_SECRET: ${PLAYER_ACCESS_SIGNING_SECRET:?PLAYER_ACCESS_SIGNING_SECRET must be set}
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?DATA_ENCRYPTION_KEY must be set}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS must be set}
+      # `api` is the private Compose DNS name used by the media worker. Public
+      # hostnames remain explicit in TRUSTED_HOSTS.
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:?TRUSTED_HOSTS must be set},api,api.internal
+      AWS_REGION: ${AWS_REGION:-sa-east-1}
+      AWS_S3_MEDIA_BUCKET: ${AWS_S3_MEDIA_BUCKET:-}
+      LOCAL_MEDIA_ROOT: /data/media
+      PUBLIC_MEDIA_BASE_URL: ${PUBLIC_BASE_URL:?PUBLIC_BASE_URL must be set}/api
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL:-http://evolution-api:8080}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
+      EVOLUTION_ENABLED: ${EVOLUTION_ENABLED:-false}
+      HEALTH_REQUIRE_WORKER: ${HEALTH_REQUIRE_WORKER:-true}
+      HEALTH_WORKER_MAX_AGE_SECONDS: ${HEALTH_WORKER_MAX_AGE_SECONDS:-45}
+      HEALTH_MIN_DISK_FREE_BYTES: ${HEALTH_MIN_DISK_FREE_BYTES:-536870912}
+    volumes:
+      - courtvision_media:/data/media
+    networks:
+      default:
+        aliases:
+          - api.internal
+    expose:
+      - "8000"
+
+  evolution-api:
+    image: evoapicloud/evolution-api:v2.3.7
+    restart: unless-stopped
+    depends_on:
+      evolution-db:
+        condition: service_healthy
+      evolution-redis:
+        condition: service_healthy
+    environment:
+      SERVER_TYPE: http
+      SERVER_PORT: 8080
+      SERVER_URL: http://evolution-api:8080
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:?EVOLUTION_API_KEY must be set}
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "false"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:${EVOLUTION_POSTGRES_PASSWORD}@evolution-db:5432/evolution?schema=public
+      DATABASE_CONNECTION_CLIENT_NAME: tveo
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "false"
+      DATABASE_SAVE_MESSAGE_UPDATE: "false"
+      DATABASE_SAVE_DATA_CONTACTS: "false"
+      DATABASE_SAVE_DATA_CHATS: "false"
+      DATABASE_SAVE_DATA_HISTORIC: "false"
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://evolution-redis:6379/1
+      CACHE_REDIS_PREFIX_KEY: tveo-evolution
+      CACHE_REDIS_SAVE_INSTANCES: "false"
+      CACHE_LOCAL_ENABLED: "false"
+      TELEMETRY_ENABLED: "false"
+      LOG_LEVEL: ERROR,WARN,INFO
+    volumes:
+      - evolution_instances:/evolution/instances
+    expose:
+      - "8080"
+
+  evolution-db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: ${EVOLUTION_POSTGRES_PASSWORD:?EVOLUTION_POSTGRES_PASSWORD must be set}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - evolution_postgres:/var/lib/postgresql/data
+
+  evolution-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - evolution_redis:/data
+
+  web:
+    # The frontend is compiled in CI (or on the operator workstation) and only
+    # the immutable static bundle is copied to the server. Building Vite on a
+    # small production node can exhaust memory and interrupt live capture.
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+    volumes:
+      - ../../apps/frontend/dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./desktop-updates:/srv/desktop-updates:ro
+    expose:
+      - "80"
+
+  gateway:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?SITE_ADDRESS must be set}
+      S3_MEDIA_ORIGIN: https://${AWS_S3_MEDIA_BUCKET:-media.invalid}.s3.amazonaws.com
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - courtvision_caddy_data:/data
+      - courtvision_caddy_config:/config
+
+  media-worker:
+    build:
+      context: ../..
+      dockerfile: apps/media-worker/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+      - evolution-api
+    environment:
+      COURTVISION_API_URL: http://api:8000
+      LOCAL_WORKER_KEY: ${LOCAL_WORKER_KEY:?LOCAL_WORKER_KEY must be set}
+      LOCAL_MEDIA_ROOT: /data/media
+      AWS_REGION: ${AWS_REGION:-sa-east-1}
+      AWS_S3_MEDIA_BUCKET: ${AWS_S3_MEDIA_BUCKET:-}
+      PUBLIC_MEDIA_BASE_URL: ${PUBLIC_BASE_URL:?PUBLIC_BASE_URL must be set}/api
+      # Evolution fetches the protected one-time media URL over the private network.
+      EVOLUTION_MEDIA_BASE_URL: http://api.internal:8000
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL:-http://evolution-api:8080}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
+      EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-courtvision}
+      EVOLUTION_ENABLED: ${EVOLUTION_ENABLED:-false}
+    volumes:
+      - courtvision_media:/data/media
+
+volumes:
+  courtvision_postgres:
+  courtvision_media:
+  courtvision_caddy_data:
+  courtvision_caddy_config:
+  evolution_instances:
+  evolution_postgres:
+  evolution_redis:

@@ -1,0 +1,269 @@
+/* ==========================================================================
+   CourtVision — design tokens
+
+   Toda decisión visual parte de este archivo. Los componentes consumen sólo
+   tokens semánticos; cambiar de tema no requiere redefinir cada pantalla.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+:root {
+  color-scheme: light;
+
+  /* Paleta base: hueso, carbón y verde salvia de la referencia. */
+  --neutral-0: #ffffff;
+  --neutral-25: #fbfcfa;
+  --neutral-50: #f5f5f1;
+  --neutral-100: #ecece6;
+  --neutral-200: #dddfd8;
+  --neutral-300: #c7cbc2;
+  --neutral-400: #626b63;
+  --neutral-500: #626b63;
+  --neutral-600: #525b54;
+  --neutral-700: #39413b;
+  --neutral-800: #252c27;
+  --neutral-900: #171c18;
+  --neutral-950: #101411;
+
+  --sage-50: #edf3ef;
+  --sage-100: #dce8e1;
+  --sage-200: #bfd3c7;
+  --sage-300: #9ab9a8;
+  --sage-400: #759d88;
+  --sage-500: #58836d;
+  --sage-600: #416b57;
+  --sage-700: #335545;
+  --sage-800: #294438;
+  --sage-900: #22382f;
+
+  --sand-50: #f7f2e7;
+  --sand-500: #b48b45;
+  --sand-700: #795b28;
+  --coral-50: #faeeeb;
+  --coral-500: #c85f55;
+  --coral-700: #9f413a;
+  --blue-50: #edf2f3;
+  --blue-500: #5f7f87;
+  --blue-700: #42626a;
+
+  /* Superficies y tinta — tema claro. */
+  --canvas: #ebeae4;
+  --browser-chrome: #ebeae4;
+  --canvas-tint: #e5e7e1;
+  --surface: var(--neutral-25);
+  --surface-raised: var(--neutral-0);
+  --surface-2: #f1f2ee;
+  --surface-3: #e7e9e4;
+  --surface-glass: rgba(251, 252, 250, .76);
+  --surface-glass-strong: rgba(251, 252, 250, .9);
+  --surface-glass-border: rgba(255, 255, 255, .72);
+  --surface-glass-border-strong: rgba(255, 255, 255, .88);
+  --surface-glass-inset: rgba(255, 255, 255, .72);
+
+  --text-primary: var(--neutral-900);
+  --text-secondary: var(--neutral-700);
+  --text-muted: var(--neutral-500);
+  --text-disabled: var(--neutral-400);
+  --text-on-accent: var(--neutral-0);
+  --text-on-inverse: var(--neutral-0);
+  --text-on-inverse-muted: rgba(255, 255, 255, .62);
+
+  --line: #e1e3dd;
+  --line-soft: #eaebe6;
+  --line-strong: #cfd3cb;
+
+  /* Acento y estados. */
+  --brand-900: #000568;
+  --brand-700: #0009b8;
+  --brand-600: #000cd8;
+  --brand-500: #000fff;
+  --brand-400: #3441ff;
+  --brand-200: #b9beff;
+  --brand-100: #daddff;
+  --brand-50: #eff0ff;
+  --warn-600: var(--sand-700);
+  --warn-500: var(--sand-500);
+  --warn-50: var(--sand-50);
+  --danger-600: var(--coral-700);
+  --danger-500: var(--coral-500);
+  --danger-50: var(--coral-50);
+  --info-600: var(--blue-700);
+  --info-500: var(--blue-500);
+  --info-50: var(--blue-50);
+  --idle-500: var(--neutral-500);
+  --idle-50: var(--neutral-100);
+
+  /* Tokens de uso: evitan colores aislados en componentes o pantallas. */
+  --surface-inverse: var(--neutral-900);
+  --control-active: var(--neutral-900);
+  --overlay: rgba(16, 20, 17, .38);
+  --media-canvas: var(--neutral-950);
+  --subtle-pattern: rgba(23, 28, 24, .022);
+  --brand-glow: rgba(0, 15, 255, .16);
+  --active-wash: rgba(255, 255, 255, .22);
+  --toast-error-icon: #f2a39d;
+
+  /* Compatibilidad: toda pantalla nueva debe usar tokens semánticos. */
+  --ink-900: var(--neutral-900);
+  --ink-700: var(--neutral-700);
+  --ink-500: var(--neutral-500);
+  --ink-400: var(--neutral-400);
+  --ink-300: var(--neutral-300);
+
+  /* Tipografía. */
+  --font-ui: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-ui);
+  --text-hero: clamp(30px, 3.6vw, 42px);
+  --text-display: clamp(24px, 2.6vw, 32px);
+  --text-title: 22px;
+  --text-heading: 17px;
+  --text-body: 14px;
+  --text-sm: 13px;
+  --text-xs: 12px;
+  --text-label: 11px;
+  --leading-tight: 1.1;
+  --leading-snug: 1.35;
+  --leading-body: 1.6;
+
+  /* Espaciado. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --gutter: clamp(16px, 2vw, 28px);
+
+  /* Geometría. */
+  --radius-xs: 7px;
+  --radius-sm: 11px;
+  --radius-md: 15px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
+  --radius-round: 999px;
+
+  /* Elevación. */
+  --shadow-xs: 0 1px 2px rgba(16, 20, 17, .06);
+  --shadow-card: 0 1px 1px rgba(16, 20, 17, .035), 0 14px 34px -26px rgba(16, 20, 17, .28);
+  --shadow-pop: 0 8px 18px -10px rgba(16, 20, 17, .16), 0 28px 56px -28px rgba(16, 20, 17, .36);
+  --shadow-dialog: 0 36px 86px -30px rgba(16, 20, 17, .48);
+  --shadow-brand: 0 10px 24px -12px rgba(0, 15, 255, .5);
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--brand-500);
+
+  /* Movimiento. */
+  --dur-instant: 100ms;
+  --dur-fast: 170ms;
+  --dur-base: 260ms;
+  --dur-slow: 420ms;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  --ease-spring: cubic-bezier(.2, .9, .2, 1.15);
+
+  --z-content: 1;
+  --z-sticky: 10;
+  --z-nav: 20;
+  --z-toast: 30;
+  --z-dialog: 40;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --canvas: #101511;
+  --browser-chrome: #101511;
+  --canvas-tint: #141b16;
+  --surface: #181f1a;
+  --surface-raised: #1d261f;
+  --surface-2: #202a23;
+  --surface-3: #2a352d;
+  --surface-glass: rgba(24, 31, 26, .78);
+  --surface-glass-strong: rgba(24, 31, 26, .92);
+  --surface-glass-border: rgba(255, 255, 255, .07);
+  --surface-glass-border-strong: rgba(255, 255, 255, .1);
+  --surface-glass-inset: rgba(255, 255, 255, .08);
+
+  --text-primary: #f1f2ed;
+  --text-secondary: #c8cdc5;
+  --text-muted: #929c93;
+  --text-disabled: #7f8a81;
+  --text-on-accent: #ffffff;
+  --text-on-inverse: #151a16;
+  --text-on-inverse-muted: rgba(21, 26, 22, .62);
+
+  --line: #2b372e;
+  --line-soft: #242f27;
+  --line-strong: #3a493e;
+
+  --brand-900: #daddff;
+  --brand-700: #b9beff;
+  --brand-600: #929aff;
+  --brand-500: #5360ff;
+  --brand-400: #7580ff;
+  --brand-200: #343b91;
+  --brand-100: #282f72;
+  --brand-50: #1d2350;
+  --warn-600: #e5c47f;
+  --warn-500: #caa45a;
+  --warn-50: #3a3020;
+  --danger-600: #f0a19a;
+  --danger-500: #d8756c;
+  --danger-50: #3e2624;
+  --info-600: #a8c3ca;
+  --info-500: #7fa0a8;
+  --info-50: #223236;
+  --idle-500: #849087;
+  --idle-50: #28312b;
+
+  --surface-inverse: #eef0ea;
+  --control-active: #eef0ea;
+  --overlay: rgba(3, 6, 4, .66);
+  --media-canvas: #050806;
+  --subtle-pattern: rgba(255, 255, 255, .025);
+  --brand-glow: rgba(83, 96, 255, .2);
+  --active-wash: rgba(255, 255, 255, .12);
+  --toast-error-icon: #d8756c;
+
+  --ink-900: var(--text-primary);
+  --ink-700: var(--text-secondary);
+  --ink-500: var(--text-muted);
+  --ink-400: var(--text-disabled);
+  --ink-300: #536058;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, .22);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, .025), 0 18px 38px -28px rgba(0, 0, 0, .8);
+  --shadow-pop: 0 12px 24px -12px rgba(0, 0, 0, .5), 0 34px 68px -28px rgba(0, 0, 0, .84);
+  --shadow-dialog: 0 38px 92px -28px rgba(0, 0, 0, .92);
+  --shadow-brand: 0 12px 28px -14px rgba(83, 96, 255, .58);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; background: var(--canvas); }
+body { transition: background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+button:disabled { cursor: not-allowed; }
+a { color: inherit; text-decoration: none; }
+
+:where(:focus-visible) {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+::selection { background: var(--brand-100); color: var(--brand-700); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--text-disabled); border: 3px solid transparent; background-clip: padding-box; border-radius: var(--radius-round); }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); background-clip: padding-box; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

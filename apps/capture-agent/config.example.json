@@ -1,0 +1,33 @@
+{
+  "cloud_api_url": "http://54.232.8.119/api",
+  "agent_token": "PEGAR_TOKEN_DE_VINCULACION_GENERADO_EN_CANCHAS",
+  "storage_dir": "~/.courtvision/media",
+  "heartbeat_seconds": 30,
+  "relay_rtsp_url": "rtsp://127.0.0.1:8554/courtvision",
+  "pose_model": "yolo26n-pose.pt",
+  "pose_device": "cpu",
+  "pose_image_size": 960,
+  "pose_person_confidence": 0.30,
+  "pose_keypoint_confidence": 0.35,
+  "pose_rotation_degrees": 0,
+  "pose_roi": [0.0, 0.0, 1.0, 1.0],
+  "pose_min_person_height_ratio": 0.06,
+  "gesture_hold_seconds": 1.2,
+  "gesture_cooldown_seconds": 15,
+  "gesture_release_seconds": 1.5,
+  "gesture_min_wrist_lift_ratio": 0.15,
+  "gesture_min_local_motion": 0.10,
+  "gesture_max_gap_seconds": 0.9,
+  "camera": {
+    "camera_id": "camera-01",
+    "field_id": "field-01",
+    "field_name": "Cancha 01",
+    "host": "192.168.0.104",
+    "rtsp_port": 554,
+    "username": "",
+    "password": "",
+    "stream_path": "/stream1",
+    "detection_mode": "arms_up",
+    "recording_enabled": true
+  }
+}

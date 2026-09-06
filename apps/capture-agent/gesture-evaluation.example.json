@@ -1,0 +1,23 @@
+{
+  "detector": {
+    "model": "yolo26n-pose.pt",
+    "device": "cpu",
+    "image_size": 640,
+    "person_confidence": 0.3,
+    "keypoint_confidence": 0.35,
+    "rotation_degrees": 0,
+    "roi": [0.0, 0.0, 1.0, 1.0],
+    "min_person_height_ratio": 0.06,
+    "hold_seconds": 0.8,
+    "cooldown_seconds": 15.0,
+    "max_gap_seconds": 0.9
+  },
+  "videos": [
+    {
+      "path": "fixtures/partido-01.mp4",
+      "gestures": [
+        { "start": 125.2, "end": 127.0 }
+      ]
+    }
+  ]
+}

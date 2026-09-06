@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /apps/api
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /apps/capture-agent
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /apps/media-worker
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: terraform
+    directory: /infra/terraform
+    schedule:
+      interval: weekly

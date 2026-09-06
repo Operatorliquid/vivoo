@@ -1,0 +1,54 @@
+{
+  "name": "courtvision-desktop",
+  "version": "0.9.0",
+  "description": "Aplicación local de captura y detección para clubes vivoo",
+  "author": "vivoo",
+  "private": true,
+  "main": "src/main.cjs",
+  "build": {
+    "appId": "com.courtvision.desktop",
+    "productName": "vivoo",
+    "icon": "build/icon.png",
+    "asar": true,
+    "files": ["src/**/*", "package.json"],
+    "extraResources": [{ "from": "runtime", "to": "runtime" }],
+    "artifactName": "vivoo-${version}-${os}-${arch}.${ext}",
+    "publish": [{ "provider": "generic", "url": "https://updates.invalid/vivoo" }],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.business",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "dmg": { "sign": false },
+    "win": { "target": "nsis" },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    }
+  },
+  "scripts": {
+    "dev": "electron .",
+    "runtime:prepare": "node scripts/prepare-native-runtime.cjs",
+    "agent:package": "python3 scripts/build-agent.py",
+    "update:stage": "node scripts/stage-update.cjs",
+    "package": "electron-builder --dir",
+    "dist:mac": "electron-builder --mac dmg zip",
+    "dist:win": "electron-builder --win nsis"
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12",
+    "ffmpeg-static": "^5.2.0",
+    "ffprobe-static": "^3.1.0"
+  }
+}

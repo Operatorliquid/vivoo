@@ -1,0 +1,23 @@
+logLevel: info
+logDestinations: [stdout]
+
+api: true
+apiAddress: 127.0.0.1:9997
+metrics: false
+pprof: false
+playback: false
+
+rtsp: true
+rtspTransports: [tcp]
+rtspAddress: 127.0.0.1:8554
+rtmp: false
+hls: false
+webrtc: false
+srt: false
+pathDefaults:
+  sourceOnDemand: true
+  sourceOnDemandStartTimeout: 15s
+  sourceOnDemandCloseAfter: 30s
+
+paths:
+  courtvision: {}

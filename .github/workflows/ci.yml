@@ -1,0 +1,162 @@
+name: vivoo CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+        with:
+          version: 10.12.4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22.20.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @courtvision/frontend lint
+      - run: pnpm --filter @courtvision/frontend typecheck
+      - run: pnpm --filter @courtvision/frontend test
+      - run: pnpm --filter @courtvision/frontend build
+
+  python:
+    name: Python services
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: 0.12.1
+          enable-cache: true
+      - run: uv python install 3.12
+      - name: API tests
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          PYTHONPATH: apps/api/src
+        run: uv run --python 3.12 --with-editable apps/api --with pytest --with httpx2 pytest -q apps/api/tests
+      - name: Capture agent tests
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          PYTHONPATH: apps/capture-agent/src
+        run: uv run --python 3.12 --with-editable apps/capture-agent --with pytest pytest -q apps/capture-agent/tests
+      - name: Media worker tests
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          PYTHONPATH: apps/media-worker/src
+        run: uv run --python 3.12 --with-editable apps/media-worker --with pytest pytest -q apps/media-worker/tests
+      - name: Syntax and undefined-name checks
+        run: uvx ruff check --select E9,F63,F7,F82 apps tests
+
+  browser:
+    name: Browser journey
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+        with:
+          version: 10.12.4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22.20.0
+          cache: pnpm
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: 0.12.1
+      - run: pnpm install --frozen-lockfile
+      - run: uv python install 3.12
+      - name: Install browser
+        run: uv run --python 3.12 --with playwright playwright install --with-deps chromium
+      - name: Start API and frontend
+        env:
+          PYTHONPATH: apps/api/src
+        run: |
+          uv run --python 3.12 --with-editable apps/api uvicorn main:app --host 127.0.0.1 --port 8000 >/tmp/courtvision-api.log 2>&1 &
+          pnpm --filter @courtvision/frontend dev --host 127.0.0.1 >/tmp/courtvision-web.log 2>&1 &
+          for attempt in {1..60}; do
+            curl --fail --silent http://127.0.0.1:8000/health >/dev/null && curl --fail --silent http://127.0.0.1:5173 >/dev/null && exit 0
+            sleep 1
+          done
+          exit 1
+      - name: Run read-only journey
+        env:
+          COURTVISION_BASE_URL: http://127.0.0.1:5173
+          COURTVISION_ARTIFACT_DIR: /tmp
+        run: uv run --python 3.12 --with playwright python tests/production_smoke.py
+      - name: Run WCAG accessibility gate
+        env:
+          COURTVISION_BASE_URL: http://127.0.0.1:5173
+        run: uv run --python 3.12 --with playwright --with axe-playwright-python python tests/accessibility_smoke.py
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: browser-smoke
+          path: /tmp/courtvision-production-smoke.png
+          if-no-files-found: ignore
+
+  security:
+    name: Source and IaC security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+      - uses: bridgecrewio/checkov-action@f967808197a8d784d3e72919f38c3ff0cda7884e # v12
+        with:
+          directory: infra/terraform
+          framework: terraform
+          quiet: true
+          soft_fail: false
+
+  containers:
+    name: Container scan (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            dockerfile: apps/api/Dockerfile
+          - name: web
+            dockerfile: apps/frontend/Dockerfile
+          - name: media-worker
+            dockerfile: apps/media-worker/Dockerfile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: docker build --file "${{ matrix.dockerfile }}" --tag "courtvision-${{ matrix.name }}:ci" .
+      - uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: courtvision-${{ matrix.name }}:ci
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true

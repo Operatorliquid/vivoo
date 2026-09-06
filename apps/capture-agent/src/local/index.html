@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>vivoo</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; background:#090d0c; color:#f6f3ea; }
+    * { box-sizing:border-box; } body { margin:0; min-height:100vh; background:radial-gradient(circle at 80% 15%,#202765 0,transparent 32%),#090b12; }
+    main { width:min(920px,100%); margin:auto; padding:48px 24px; } .mark { display:flex; align-items:center; gap:10px; color:#f6f3ea; font-weight:800; letter-spacing:-.04em; font-size:22px; } .mark svg { width:42px; height:22px; }
+    .eyebrow { color:#929aff; font-size:10px; letter-spacing:.16em; font-weight:700; } h1 { max-width:650px; margin:18px 0 8px; font-size:clamp(38px,7vw,72px); line-height:.95; letter-spacing:-.075em; } h1 em { color:#5360ff; font-style:normal; }
+    .lede { max-width:560px; color:#aeb8b0; line-height:1.6; } .layout { display:grid; grid-template-columns:1.2fr .8fr; gap:16px; margin-top:36px; } section { border:1px solid #26342c; background:rgba(19,28,23,.88); border-radius:16px; padding:20px; box-shadow:0 20px 80px #0005; }
+    h2 { margin:0 0 18px; font-size:17px; letter-spacing:-.03em; } label { display:grid; gap:7px; margin-top:14px; color:#a7aabd; font-size:11px; } input { width:100%; height:42px; padding:0 12px; color:#f6f3ea; background:#10121d; border:1px solid #303655; border-radius:8px; outline:0; } input:focus { border-color:#5360ff; }
+    button { margin-top:18px; border:0; border-radius:8px; padding:11px 14px; color:#fff; background:#000fff; font-weight:800; cursor:pointer; } button:disabled { opacity:.5; cursor:wait; } .status { min-height:180px; display:grid; place-content:center; text-align:center; } .dot { width:10px; height:10px; margin:0 auto 13px; border-radius:50%; background:#d94e43; box-shadow:0 0 0 7px #d94e4320; } .dot.online { background:#5360ff; box-shadow:0 0 0 7px #5360ff20; } .status strong { display:block; font-size:22px; } .status p { color:#9296a8; font-size:12px; } code { display:block; margin-top:18px; padding:10px; overflow:auto; color:#929aff; background:#0b0d16; border-radius:7px; font-size:10px; } .hint { color:#7e8295; font-size:11px; line-height:1.5; }
+    @media (max-width:700px) { main { padding:30px 18px; } .layout { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark"><svg viewBox="0 0 433 229" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M87.576 3.062C46.837 13.409 15.466 43.678 3.019 84.654c-4.17 13.723-3.986 46.764.339 61.565 7.827 26.773 25.33 49.893 49.685 65.619C71.846 223.978 89.885 229 114.707 229c26.279 0 40.726-5.12 68.943-24.429 11.557-7.911 23.989-15.035 27.624-15.833 8.742-1.919 18.963 2.522 38.395 16.682 23.747 17.299 37.383 22.218 64.277 23.178 27.061.967 45.019-3.627 65.037-16.636 39.778-25.852 60.081-70.307 52.341-114.604-8.154-46.668-39.193-80.671-85.129-93.261-31.915-8.747-61.214-3.52-89.673 15.997-40.796 27.978-40.167 27.971-79.742.842-8.474-5.81-21.021-12.588-27.882-15.067C133.338.251 103.942-1.093 87.576 3.062Zm51.808 47.03c5.234 2.372 15.556 9.065 22.937 14.873 22.429 17.649 33.708 22.212 54.702 22.129 17.561-.068 33.562-6.77 52.82-22.12 19.234-15.33 29.454-19.292 49.765-19.292 13.474 0 18.098 1.054 29.403 6.696 14.873 7.426 26.92 19.833 33.762 34.769 6.411 13.995 6.414 40.899.004 55.032-6.621 14.6-22.63 30.861-36.071 36.638-26.641 11.45-50.34 7.588-74.852-12.204-22.346-18.042-34.915-23.299-55.702-23.299-20.152 0-33.721 5.345-52.433 20.654-20.256 16.57-29.09 20.213-49.143 20.254-14.426.031-19.571-.966-29.49-5.711-15.457-7.396-27.633-19.526-34.75-34.623-8.316-17.642-8.104-41.952.52-59.5 7.045-14.332 22.423-28.803 36.805-34.634 13.443-5.452 39.324-5.284 51.723.338Z" fill="#000fff"/></svg><span>vivoo / desktop</span></div>
+    <span class="eyebrow">EQUIPO LOCAL DE CAPTURA</span>
+    <h1>La cancha queda<br /><em>en tus manos.</em></h1>
+    <p class="lede">Esta aplicación conecta la cámara desde la red local, graba aunque la conexión tenga cortes y sincroniza partidos y highlights con la plataforma.</p>
+    <div class="layout">
+      <section><h2>Vincular cámara</h2><p class="hint">Pegá el token generado desde Canchas en el dashboard. La contraseña RTSP queda en este equipo y no se muestra en la nube.</p>
+        <label>Token del equipo<input id="token" placeholder="agent...." /></label>
+        <label>ID de cámara<input id="cameraId" placeholder="camera-01" /></label>
+        <label>IP local<input id="host" placeholder="192.168.0.104" /></label>
+        <label>Usuario RTSP<input id="username" placeholder="Toppadel" /></label>
+        <label>Contraseña RTSP<input id="password" type="password" /></label>
+        <label>Ruta<input id="path" value="/stream1" /></label>
+        <button id="save">Guardar y comprobar</button><span id="message" class="hint"></span>
+      </section>
+      <section><h2>Estado de captura</h2><div id="status" class="status"><div><div class="dot"></div><strong>Sin comprobar</strong><p>Configurá la cámara para comenzar.</p></div></div><code id="details">vivoo · puerto local 8781</code></section>
+    </div>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    async function refresh() { try { const data = await fetch('/v1/status').then(r => r.json()); const s = data.state || {}; const online = s.camera_status === 'online'; $('status').innerHTML = `<div><div class="dot ${online ? 'online' : ''}"></div><strong>${online ? 'Cámara online' : (s.camera_status === 'offline' ? 'Sin señal' : 'Pendiente')}</strong><p>${s.camera_detail || ''}</p></div>`; $('details').textContent = JSON.stringify(data, null, 2); } catch (error) { $('details').textContent = 'El agente local no está respondiendo.'; } }
+    $('save').onclick = async () => { $('save').disabled = true; $('message').textContent = 'Guardando…'; const payload = { cloud_api_url: 'http://54.232.8.119/api', agent_token: $('token').value.trim(), camera: { camera_id: $('cameraId').value.trim(), host: $('host').value.trim(), username: $('username').value.trim(), password: $('password').value, stream_path: $('path').value.trim() || '/stream1', recording_enabled: true } }; const response = await fetch('/v1/config', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }); $('message').textContent = response.ok ? 'Configuración guardada.' : 'No se pudo guardar la configuración.'; $('save').disabled = false; refresh(); };
+    refresh(); setInterval(refresh, 10000);
+  </script>
+</body></html>

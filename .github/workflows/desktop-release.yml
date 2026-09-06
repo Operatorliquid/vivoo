@@ -1,0 +1,122 @@
+name: vivoo Desktop installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["desktop-v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vivoo-desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  installer:
+    name: ${{ matrix.label }} installer
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS
+            os: macos-14
+            command: dist:mac
+            artifact: macos
+          - label: Windows
+            os: windows-latest
+            command: dist:win
+            artifact: windows
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_LINK: ${{ matrix.artifact == 'macos' && secrets.MACOS_CSC_LINK || secrets.WINDOWS_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ matrix.artifact == 'macos' && secrets.MACOS_CSC_KEY_PASSWORD || secrets.WINDOWS_CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+        with:
+          version: 10.12.4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22.20.0
+          cache: pnpm
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: 0.12.1
+      - run: pnpm install --frozen-lockfile
+      - run: uv python install 3.12
+      - name: Package capture runtime
+        shell: bash
+        run: uv run --python 3.12 --with-editable 'apps/capture-agent[vision]' --with pyinstaller python apps/desktop/scripts/build-agent.py
+      - name: Fetch pose model
+        shell: bash
+        run: uv run --python 3.12 --with ultralytics==8.4.137 python -c "from ultralytics import YOLO; YOLO('yolo26n-pose.pt')"
+      - name: Prepare native video runtime
+        run: pnpm --dir apps/desktop runtime:prepare
+      - name: Validate bundled detector
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            apps/desktop/runtime/agent/courtvision-agent/courtvision-agent.exe --resources apps/desktop/runtime --self-test
+          else
+            apps/desktop/runtime/agent/courtvision-agent/courtvision-agent --resources apps/desktop/runtime --self-test
+          fi
+      - name: Build installer
+        run: pnpm --dir apps/desktop ${{ matrix.command }}
+      - name: Stage and validate automatic-update feed
+        run: pnpm --dir apps/desktop update:stage
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: vivoo-desktop-${{ matrix.artifact }}
+          path: |
+            apps/desktop/dist/*.dmg
+            apps/desktop/dist/*.zip
+            apps/desktop/dist/*.exe
+            apps/desktop/dist/*.blockmap
+            apps/desktop/dist/latest*.yml
+            infra/deploy/desktop-updates/**
+          if-no-files-found: error
+
+  publish-update-feed:
+    name: Publish automatic updates
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: installer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: vivoo-desktop-*
+          path: /tmp/vivoo-release
+          merge-multiple: true
+      - name: Configure authenticated deployment
+        id: deploy-config
+        env:
+          DEPLOY_HOST: ${{ secrets.DESKTOP_UPDATE_HOST }}
+          DEPLOY_USER: ${{ secrets.DESKTOP_UPDATE_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DESKTOP_UPDATE_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DESKTOP_UPDATE_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$DEPLOY_HOST" ] || [ -z "$DEPLOY_USER" ] || [ -z "$DEPLOY_SSH_KEY" ] || [ -z "$DEPLOY_KNOWN_HOSTS" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Update-feed secrets are not configured; installers remain available as workflow artifacts."
+            exit 0
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/vivoo-update
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/vivoo-update ~/.ssh/known_hosts
+          printf 'Host vivoo-update\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/vivoo-update\n  IdentitiesOnly yes\n' "$DEPLOY_HOST" "$DEPLOY_USER" > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+      - name: Publish artifacts before manifests
+        if: steps.deploy-config.outputs.enabled == 'true'
+        run: |
+          FEED=/tmp/vivoo-release/infra/deploy/desktop-updates
+          test -d "$FEED"
+          rsync -az --exclude 'latest*.yml' "$FEED/" vivoo-update:/home/ubuntu/courtvision/infra/deploy/desktop-updates/
+          rsync -az --include '*/' --include 'latest*.yml' --exclude '*' "$FEED/" vivoo-update:/home/ubuntu/courtvision/infra/deploy/desktop-updates/

@@ -1,0 +1,12 @@
+.git/
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.tfvars
+*.tfvars.json
+*.key
+*.crt
+secrets/
+node_modules/
+dist/
