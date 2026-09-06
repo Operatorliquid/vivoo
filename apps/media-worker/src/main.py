@@ -42,7 +42,7 @@ def main() -> None:
         try:
             now = time.monotonic()
             if now - last_heartbeat >= 15:
-                worker.api.heartbeat()
+                worker.api.heartbeat({"delivery_queue_depth": worker.delivery_outbox.pending_count()})
                 last_heartbeat = now
             processed = worker.process_once()
         except WorkerApiError:

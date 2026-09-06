@@ -36,8 +36,8 @@ class WorkerApiClient:
         status_code, body = self._request("GET", "/worker/jobs/next")
         return json.loads(body) if status_code != 204 and body else None
 
-    def heartbeat(self) -> None:
-        self._request("POST", "/worker/heartbeat")
+    def heartbeat(self, metadata: dict | None = None) -> None:
+        self._request("POST", "/worker/heartbeat", metadata or {})
 
     def complete_job(self, job_id: UUID, succeeded: bool, output_storage_key: str | None = None, error: str | None = None) -> None:
         self._request("POST", f"/worker/jobs/{job_id}/complete", {

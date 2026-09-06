@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
+import time
 from dataclasses import dataclass
 from typing import Callable
 from urllib.error import HTTPError
@@ -43,6 +45,8 @@ def owner_instance_name(owner_id: str) -> str:
 class EvolutionService:
     def __init__(self, opener: Callable = urlopen) -> None:
         self._opener = opener
+        self._reconnect_after: dict[str, float] = {}
+        self._lock = threading.Lock()
 
     @property
     def configured(self) -> bool:
@@ -85,21 +89,59 @@ class EvolutionService:
             pairing_code=pairing_code,
         )
 
+    def _status(self, instance_name: str) -> WhatsAppConnection:
+        payload = self._request("GET", f"/instance/connectionState/{instance_name}")
+        return self._connection(instance_name, payload)
+
     def status(self, owner_id: str) -> WhatsAppConnection:
         instance_name = owner_instance_name(owner_id)
         if not self.configured:
             return WhatsAppConnection("unavailable", instance_name)
         try:
-            payload = self._request("GET", f"/instance/connectionState/{instance_name}")
-            return self._connection(instance_name, payload)
+            connection = self._status(instance_name)
         except EvolutionServiceError as error:
             if "404" in str(error):
                 return WhatsAppConnection("disconnected", instance_name)
             raise
+        if connection.status == "connected":
+            with self._lock:
+                self._reconnect_after.pop(instance_name, None)
+            return connection
+
+        now = time.monotonic()
+        with self._lock:
+            retry_after = self._reconnect_after.get(instance_name, 0)
+            if now < retry_after:
+                return WhatsAppConnection(
+                    "connecting", instance_name, connection.phone, connection.profile_name,
+                )
+            self._reconnect_after[instance_name] = now + 30
+        try:
+            payload = self._request("GET", f"/instance/connect/{instance_name}")
+            recovered = self._connection(instance_name, payload, include_qr=True)
+            if recovered.status == "connected":
+                with self._lock:
+                    self._reconnect_after.pop(instance_name, None)
+                return recovered
+            return WhatsAppConnection(
+                "connecting", instance_name, recovered.phone, recovered.profile_name,
+                recovered.qr_base64, recovered.pairing_code,
+            )
+        except EvolutionServiceError:
+            # La consulta de estado sigue siendo válida. El próximo poll volverá
+            # a intentar sin convertir una desconexión temporal en un error 503.
+            return WhatsAppConnection(
+                "connecting", instance_name, connection.phone, connection.profile_name,
+            )
 
     def connect(self, owner_id: str) -> WhatsAppConnection:
         instance_name = owner_instance_name(owner_id)
-        current = self.status(owner_id)
+        try:
+            current = self._status(instance_name)
+        except EvolutionServiceError as error:
+            if "404" not in str(error):
+                raise
+            current = WhatsAppConnection("disconnected", instance_name)
         if current.status == "connected":
             return current
         if current.status == "disconnected":
@@ -134,6 +176,13 @@ class EvolutionService:
             except EvolutionServiceError as error:
                 if "404" not in str(error):
                     raise
+            try:
+                self._request("DELETE", f"/instance/delete/{instance_name}")
+            except EvolutionServiceError as error:
+                if "404" not in str(error):
+                    raise
+        with self._lock:
+            self._reconnect_after.pop(instance_name, None)
         return WhatsAppConnection("disconnected", instance_name)
 
 

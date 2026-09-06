@@ -1,4 +1,6 @@
-const { app, BrowserWindow, dialog, shell } = require('electron');
+const {
+  app, BrowserWindow, dialog, Menu, nativeImage, powerMonitor, powerSaveBlocker, shell, Tray,
+} = require('electron');
 const { spawn, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -13,6 +15,12 @@ let quitting = false;
 let logPath;
 let dashboardProxy;
 let updateInstallTimer;
+let watchdogTimer;
+let powerBlockerId;
+let mainWindow;
+let tray;
+const serviceFailures = new Map();
+const serviceStartedAt = new Map();
 
 function redact(value) {
   return String(value).replace(/rtsp:\/\/[^\s/@]+:[^\s/@]+@/g, 'rtsp://***:***@');
@@ -63,13 +71,21 @@ function spawnManaged(name, command, args, env = {}) {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   managed.set(name, child);
+  serviceStartedAt.set(name, Date.now());
   child.stdout.on('data', (chunk) => log(`[${name}] ${chunk}`));
   child.stderr.on('data', (chunk) => log(`[${name}] ${chunk}`));
   child.on('error', (error) => log(`${name} no pudo iniciarse: ${error.message}`));
   child.on('close', (code, signal) => {
     if (managed.get(name) === child) managed.delete(name);
     log(`${name} finalizó (code=${code}, signal=${signal || 'none'})`);
-    if (!quitting) setTimeout(() => startService(name), 3000);
+    if (!quitting) {
+      const stable = Date.now() - (serviceStartedAt.get(name) || 0) > 60_000;
+      const failures = stable ? 0 : Math.min((serviceFailures.get(name) || 0) + 1, 8);
+      serviceFailures.set(name, failures);
+      const delay = Math.min(3_000 * (2 ** failures), 60_000);
+      log(`${name} se reiniciará en ${Math.round(delay / 1000)}s`);
+      setTimeout(() => startService(name), delay).unref();
+    }
   });
 }
 
@@ -97,6 +113,47 @@ function initializeAgent() {
     return false;
   }
   return true;
+}
+
+function configureWindowsBackgroundTask() {
+  const script = [
+    "$action = New-ScheduledTaskAction -Execute $env:VIVOO_TASK_EXECUTABLE -Argument '--background'",
+    "$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME",
+    "$settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew",
+    "Register-ScheduledTask -TaskName 'VivooCaptureService' -Action $action -Trigger $trigger -Settings $settings -Description 'Mantiene activa la captura local de vivoo' -Force | Out-Null",
+  ].join('; ');
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const result = spawnSync('powershell.exe', [
+    '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded,
+  ], {
+    env: { ...process.env, VIVOO_TASK_EXECUTABLE: process.execPath },
+    windowsHide: true,
+    encoding: 'utf8',
+  });
+  if (result.status === 0) {
+    log('Inicio protegido de Windows configurado');
+    return true;
+  }
+  log(`No se pudo configurar el inicio protegido: ${result.stderr || result.error || 'error desconocido'}`);
+  return false;
+}
+
+function configureStartup() {
+  if (!app.isPackaged) return;
+  if (process.platform === 'win32') {
+    const scheduled = configureWindowsBackgroundTask();
+    app.setLoginItemSettings({
+      openAtLogin: !scheduled,
+      openAsHidden: true,
+      args: ['--background'],
+    });
+    return;
+  }
+  app.setLoginItemSettings({
+    openAtLogin: true,
+    openAsHidden: true,
+    args: ['--background'],
+  });
 }
 
 function startService(name) {
@@ -136,6 +193,45 @@ function stopServices() {
   managed.clear();
   dashboardProxy?.close();
   if (updateInstallTimer) clearTimeout(updateInstallTimer);
+  if (watchdogTimer) clearInterval(watchdogTimer);
+  if (Number.isInteger(powerBlockerId) && powerSaveBlocker.isStarted(powerBlockerId)) {
+    powerSaveBlocker.stop(powerBlockerId);
+  }
+}
+
+function ensureService(name) {
+  if (quitting || managed.has(name)) return;
+  startService(name);
+}
+
+async function ensureLocalRuntime() {
+  const agentRunning = await endpointAvailable('http://127.0.0.1:8781/v1/status');
+  if (!agentRunning) {
+    const child = managed.get('agent');
+    const age = Date.now() - (serviceStartedAt.get('agent') || 0);
+    if (child && age > 45_000) {
+      log('Watchdog: agente sin respuesta; reiniciando');
+      child.kill();
+    } else if (!child) {
+      ensureService('agent');
+    }
+  } else {
+    serviceFailures.set('agent', 0);
+  }
+
+  const relayRunning = await endpointAvailable('http://127.0.0.1:9997/v3/config/global/get');
+  if (!relayRunning && !managed.has('relay')) ensureService('relay');
+  if (relayRunning) serviceFailures.set('relay', 0);
+}
+
+function startRuntimeWatchdog() {
+  void ensureLocalRuntime();
+  watchdogTimer = setInterval(() => void ensureLocalRuntime(), 15_000);
+  watchdogTimer.unref();
+  powerMonitor.on('resume', () => {
+    log('Equipo reanudado; verificando cámara y detector');
+    setTimeout(() => void ensureLocalRuntime(), 2_000).unref();
+  });
 }
 
 async function endpointAvailable(url) {
@@ -280,7 +376,18 @@ function createWindow(appUrl) {
     show: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
-  window.once('ready-to-show', () => window.show());
+  mainWindow = window;
+  const launchedInBackground = process.argv.includes('--background');
+  window.once('ready-to-show', () => {
+    if (!launchedInBackground) window.show();
+  });
+  window.on('close', (event) => {
+    if (quitting) return;
+    event.preventDefault();
+    window.hide();
+    log('Ventana oculta; la captura continúa en segundo plano');
+  });
+  window.on('closed', () => { if (mainWindow === window) mainWindow = undefined; });
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (new URL(url).origin === dashboardOrigin) return { action: 'allow' };
     void shell.openExternal(url);
@@ -298,6 +405,34 @@ function createWindow(appUrl) {
   });
 }
 
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function createTray() {
+  if (tray) return;
+  const iconPath = path.join(__dirname, '../build/icon.png');
+  let icon = nativeImage.createFromPath(iconPath);
+  if (process.platform === 'darwin') icon = icon.resize({ width: 18, height: 18 });
+  tray = new Tray(icon);
+  tray.setToolTip('vivoo · captura activa');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Abrir vivoo', click: showMainWindow },
+    { type: 'separator' },
+    {
+      label: 'Salir y detener captura',
+      click: () => {
+        quitting = true;
+        app.quit();
+      },
+    },
+  ]));
+  tray.on('double-click', showMainWindow);
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -305,7 +440,10 @@ if (!app.requestSingleInstanceLock()) {
     const logsDirectory = path.join(dataRoot(), 'logs');
     fs.mkdirSync(logsDirectory, { recursive: true, mode: 0o700 });
     logPath = path.join(logsDirectory, 'desktop.log');
-    if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: true });
+    configureStartup();
+    powerBlockerId = powerSaveBlocker.start('prevent-app-suspension');
+    log(`Protección contra suspensión activa (${powerBlockerId})`);
+    createTray();
     if (!fs.existsSync(configPath()) && !initializeAgent()) {
       dialog.showErrorBox('vivoo', 'No se pudo preparar el equipo local. El detalle quedó guardado en los registros de vivoo.');
     } else {
@@ -314,6 +452,7 @@ if (!app.requestSingleInstanceLock()) {
       if (relayRunning) log('Relay local existente detectado'); else startService('relay');
       const agentRunning = await endpointAvailable('http://127.0.0.1:8781/v1/status');
       if (agentRunning) log('Agente local existente detectado'); else startService('agent');
+      startRuntimeWatchdog();
     }
     try {
       createWindow(await startDashboardProxy());
@@ -325,10 +464,18 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
-app.on('before-quit', stopServices);
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('before-quit', () => {
+  quitting = true;
+  stopServices();
+});
+app.on('window-all-closed', () => {
+  log('Todas las ventanas cerradas; servicios locales continúan activos');
+});
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0 && dashboardProxy?.address()) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    showMainWindow();
+  } else if (dashboardProxy?.address()) {
     createWindow(`http://127.0.0.1:${dashboardProxy.address().port}`);
   }
 });
+app.on('second-instance', showMainWindow);

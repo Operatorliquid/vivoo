@@ -16,6 +16,18 @@ cámara, el detector de pose, FFmpeg y MediaMTX. Se inicia con el sistema y
 reinicia automáticamente los servicios locales si alguno falla. El usuario no
 debe instalar Python ni abrir una terminal.
 
+Cerrar la ventana sólo oculta vivoo: la captura sigue activa en la bandeja del
+sistema. El watchdog comprueba el agente cada 15 segundos, lo reinicia con
+backoff si deja de responder y vuelve a validar cámara y detector al reanudar el
+equipo. Mientras vivoo está abierto bloquea la suspensión del proceso para que
+Windows o macOS no congelen una grabación. **Salir y detener captura** es la única
+acción de la bandeja que apaga deliberadamente los servicios.
+
+En Windows la primera ejecución registra `VivooCaptureService` en el Programador
+de tareas del usuario, con reinicio al minuto si el proceso principal falla y
+sin límite de ejecución. El desinstalador retira esa tarea. Si Windows impide el
+registro, vivoo vuelve automáticamente al inicio de sesión estándar.
+
 Una sola instalación administra varias cámaras. Cada cámara conserva token,
 credenciales, detector, grabación, buffer y almacenamiento local aislados; una
 falla no cambia la configuración de las demás.

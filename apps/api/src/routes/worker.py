@@ -2,7 +2,7 @@ from uuid import UUID
 
 from auth.dependencies import get_current_worker
 from domain.schemas import WorkerDeliveryResultRequest, WorkerJobCompleteRequest
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Body, Depends, Response, status
 from services.health_service import health_service
 from services.media_storage import media_storage
 from services.store import store
@@ -11,9 +11,15 @@ router = APIRouter(prefix="/worker", tags=["Media Worker"])
 
 
 @router.post("/heartbeat", status_code=204)
-def worker_heartbeat(_: dict[str, str] = Depends(get_current_worker)):
+def worker_heartbeat(
+    metadata: dict[str, object] = Body(default_factory=dict),
+    _: dict[str, str] = Depends(get_current_worker),
+):
     deleted = store.purge_expired_recordings(media_storage.delete)
-    health_service.record_worker({"state": "running", "expired_recordings_deleted": deleted})
+    health_service.record_worker({
+        "state": "running", "expired_recordings_deleted": deleted,
+        "delivery_queue_depth": int(metadata.get("delivery_queue_depth", 0)),
+    })
 
 
 @router.get("/jobs/next")

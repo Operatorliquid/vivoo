@@ -52,6 +52,8 @@ services:
       EVOLUTION_ENABLED: ${EVOLUTION_ENABLED:-false}
       HEALTH_REQUIRE_WORKER: ${HEALTH_REQUIRE_WORKER:-true}
       HEALTH_WORKER_MAX_AGE_SECONDS: ${HEALTH_WORKER_MAX_AGE_SECONDS:-45}
+      HEALTH_REQUIRE_BACKUP: ${HEALTH_REQUIRE_BACKUP:-true}
+      HEALTH_BACKUP_MAX_AGE_SECONDS: ${HEALTH_BACKUP_MAX_AGE_SECONDS:-23400}
       HEALTH_MIN_DISK_FREE_BYTES: ${HEALTH_MIN_DISK_FREE_BYTES:-536870912}
     volumes:
       - courtvision_media:/data/media
@@ -94,6 +96,12 @@ services:
       LOG_LEVEL: ERROR,WARN,INFO
     volumes:
       - evolution_instances:/evolution/instances
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/instance/fetchInstances',{headers:{apikey:process.env.AUTHENTICATION_API_KEY}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
     expose:
       - "8080"
 
@@ -162,8 +170,10 @@ services:
       dockerfile: apps/media-worker/Dockerfile
     restart: unless-stopped
     depends_on:
-      - api
-      - evolution-api
+      api:
+        condition: service_started
+      evolution-api:
+        condition: service_healthy
     environment:
       COURTVISION_API_URL: http://api:8000
       LOCAL_WORKER_KEY: ${LOCAL_WORKER_KEY:?LOCAL_WORKER_KEY must be set}
@@ -180,6 +190,34 @@ services:
     volumes:
       - courtvision_media:/data/media
 
+  backup:
+    build:
+      context: ../..
+      dockerfile: infra/deploy/backup/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      evolution-db:
+        condition: service_healthy
+    environment:
+      COURTVISION_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      EVOLUTION_POSTGRES_PASSWORD: ${EVOLUTION_POSTGRES_PASSWORD:?EVOLUTION_POSTGRES_PASSWORD must be set}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-21600}
+      BACKUP_LOCAL_RETENTION_DAYS: ${BACKUP_LOCAL_RETENTION_DAYS:-7}
+      AWS_REGION: ${AWS_REGION:-sa-east-1}
+      AWS_S3_MEDIA_BUCKET: ${AWS_S3_MEDIA_BUCKET:-}
+      AWS_S3_BACKUP_BUCKET: ${AWS_S3_BACKUP_BUCKET:-}
+      AWS_S3_BACKUP_PREFIX: ${AWS_S3_BACKUP_PREFIX:-backups/vivoo}
+    volumes:
+      - courtvision_backups:/backups
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/vivoo-backup-health"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 10m
+
 volumes:
   courtvision_postgres:
   courtvision_media:
@@ -188,3 +226,4 @@ volumes:
   evolution_instances:
   evolution_postgres:
   evolution_redis:
+  courtvision_backups:

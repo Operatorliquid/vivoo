@@ -134,6 +134,8 @@ jobs:
           framework: terraform
           quiet: true
           soft_fail: false
+      - name: Validate recovery scripts
+        run: sh -n infra/deploy/backup/backup.sh infra/deploy/backup/restore.sh infra/deploy/backup/healthcheck.sh
 
   containers:
     name: Container scan (${{ matrix.name }})
@@ -148,6 +150,8 @@ jobs:
             dockerfile: apps/frontend/Dockerfile
           - name: media-worker
             dockerfile: apps/media-worker/Dockerfile
+          - name: backup
+            dockerfile: infra/deploy/backup/Dockerfile
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

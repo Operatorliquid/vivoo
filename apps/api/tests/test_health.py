@@ -11,6 +11,7 @@ def test_health_reports_real_component_checks() -> None:
     assert payload["checks"]["database"]["status"] == "disabled"
     assert payload["checks"]["storage"]["status"] == "ok"
     assert payload["checks"]["worker"]["status"] == "disabled"
+    assert payload["checks"]["backup"]["status"] == "disabled"
 
 
 def test_liveness_does_not_claim_dependency_readiness() -> None:

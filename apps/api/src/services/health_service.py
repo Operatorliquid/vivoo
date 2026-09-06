@@ -56,13 +56,41 @@ class HealthService:
             import psycopg
             with psycopg.connect(settings.database_url, connect_timeout=2) as connection:
                 row = connection.execute(
-                    "SELECT observed_at FROM courtvision_service_heartbeats WHERE service_name='media-worker'"
+                    "SELECT observed_at, metadata FROM courtvision_service_heartbeats WHERE service_name='media-worker'"
                 ).fetchone()
             if row is None:
                 return {"status": "error" if settings.health_require_worker else "waiting", "last_seen_at": None}
-            observed_at = row[0]
+            observed_at, metadata = row
             age = max(0.0, (datetime.now(timezone.utc) - observed_at).total_seconds())
-            return {"status": "ok" if age <= settings.health_worker_max_age_seconds else "error", "last_seen_at": observed_at.isoformat(), "age_seconds": round(age, 1)}
+            return {
+                "status": "ok" if age <= settings.health_worker_max_age_seconds else "error",
+                "last_seen_at": observed_at.isoformat(),
+                "age_seconds": round(age, 1),
+                "delivery_queue_depth": int((metadata or {}).get("delivery_queue_depth", 0)),
+            }
+        except Exception as error:
+            return {"status": "error", "detail": type(error).__name__}
+
+    def backup(self) -> dict[str, object]:
+        if not self._database_enabled():
+            return {"status": "disabled"}
+        try:
+            import psycopg
+            with psycopg.connect(settings.database_url, connect_timeout=2) as connection:
+                row = connection.execute(
+                    "SELECT observed_at, metadata FROM courtvision_service_heartbeats WHERE service_name='backup'"
+                ).fetchone()
+            if row is None:
+                status = "error" if settings.health_require_backup else "waiting"
+                return {"status": status, "last_seen_at": None}
+            observed_at, metadata = row
+            age = max(0.0, (datetime.now(timezone.utc) - observed_at).total_seconds())
+            return {
+                "status": "ok" if age <= settings.health_backup_max_age_seconds else "error",
+                "last_seen_at": observed_at.isoformat(),
+                "age_seconds": round(age, 1),
+                "verified_restore": bool((metadata or {}).get("verified_restore")),
+            }
         except Exception as error:
             return {"status": "error", "detail": type(error).__name__}
 
@@ -81,7 +109,12 @@ class HealthService:
             )
 
     def report(self) -> tuple[dict[str, object], bool]:
-        checks = {"database": self.database(), "storage": self.storage(), "worker": self.worker()}
+        checks = {
+            "database": self.database(),
+            "storage": self.storage(),
+            "worker": self.worker(),
+            "backup": self.backup(),
+        }
         healthy = all(check["status"] in {"ok", "disabled", "waiting"} for check in checks.values())
         return {"status": "ok" if healthy else "degraded", "service": "vivoo-api", "checks": checks}, healthy
 

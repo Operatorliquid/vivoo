@@ -21,6 +21,38 @@ instancia opaca por dueño y el QR se muestra en **Configuración → WhatsApp**
 clave global de Evolution nunca llega al frontend. La sesión de WhatsApp
 persiste en `evolution_instances` y su base en `evolution_postgres`.
 
+El API y el worker comprueban el estado de esa sesión antes de entregar. Si las
+credenciales persistidas siguen siendo válidas, Evolution se reconecta sin
+intervención. Los mensajes pendientes quedan en una outbox SQLite dentro del
+volumen de media durante hasta 48 horas, con backoff; reiniciar el worker no los
+pierde y un callback caído no provoca un envío duplicado. Si WhatsApp revoca la
+sesión, Configuración vuelve a mostrar el QR.
+
+## Backups y recuperación
+
+El servicio `backup` genera cada seis horas dos dumps consistentes: vivoo y la
+base de Evolution. Antes de declararlos válidos levanta PostgreSQL de forma
+aislada y restaura ambos dumps completos. Sólo después calcula checksums, los
+sube a S3 y registra el heartbeat que expone `/health`. Conserva siete días en
+el volumen local. Si `AWS_S3_BACKUP_BUCKET` queda vacío utiliza
+`AWS_S3_MEDIA_BUCKET` bajo `backups/vivoo/`; para producción se recomienda un
+bucket privado separado con versionado y cifrado.
+
+Ver el último backup verificado:
+
+```bash
+docker compose --env-file .env -f infra/deploy/compose.yml exec backup sh -c 'cat /backups/latest && cat /backups/last-success.epoch'
+```
+
+Restaurar es deliberadamente manual. Primero se detienen los consumidores, se
+ejecuta la restauración con la frase de confirmación y luego se levantan otra vez:
+
+```bash
+docker compose --env-file .env -f infra/deploy/compose.yml stop api media-worker evolution-api
+docker compose --env-file .env -f infra/deploy/compose.yml run --rm --entrypoint /usr/local/bin/vivoo-restore backup /backups/AAAAMMDDTHHMMSSZ RESTORE_VIVOO_BACKUP
+docker compose --env-file .env -f infra/deploy/compose.yml up -d api evolution-api media-worker
+```
+
 La instancia necesita al menos 16 GB de disco raíz para alojar la aplicación,
 Evolution y el margen operativo de videos temporales. `/health` devuelve 503 si
 PostgreSQL, el almacenamiento o el heartbeat del worker no están sanos;

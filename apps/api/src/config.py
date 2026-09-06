@@ -24,6 +24,8 @@ class Settings:
     evolution_enabled: bool = os.getenv("EVOLUTION_ENABLED", "false").lower() == "true"
     health_require_worker: bool = os.getenv("HEALTH_REQUIRE_WORKER", "false").lower() == "true"
     health_worker_max_age_seconds: int = int(os.getenv("HEALTH_WORKER_MAX_AGE_SECONDS", "45"))
+    health_require_backup: bool = os.getenv("HEALTH_REQUIRE_BACKUP", "false").lower() == "true"
+    health_backup_max_age_seconds: int = int(os.getenv("HEALTH_BACKUP_MAX_AGE_SECONDS", "23400"))
     health_min_disk_free_bytes: int = int(os.getenv("HEALTH_MIN_DISK_FREE_BYTES", str(512 * 1024 * 1024)))
     cors_allowed_origins: str = os.getenv(
         "CORS_ALLOWED_ORIGINS",

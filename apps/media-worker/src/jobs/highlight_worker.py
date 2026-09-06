@@ -4,6 +4,7 @@ from pathlib import Path
 
 from clipping.highlight_processor import ClipRequest, assemble_highlight
 from delivery.evolution_client import EvolutionApiClient
+from delivery.outbox import DeliveryOutbox, DeliveryItem
 from storage.media_repository import MediaRepository
 from worker_api_client import WorkerApiClient
 
@@ -15,8 +16,13 @@ class HighlightWorker:
         self.media = media_repository or MediaRepository(media_root)
         self.evolution = evolution
         self.public_media_base_url = public_media_base_url.rstrip("/")
+        self.delivery_outbox = DeliveryOutbox(media_root / ".vivoo-delivery-outbox.sqlite3")
 
     def process_once(self) -> bool:
+        delivery = self.delivery_outbox.claim_next()
+        if delivery is not None:
+            self._deliver_once(delivery)
+            return True
         job = self.api.lease_next_job()
         if job is None:
             return False
@@ -36,9 +42,9 @@ class HighlightWorker:
             output_path = self.media.working_path(output_key)
             assemble_highlight(ClipRequest(source_path, output_path, 0, max(1, int(job["duration_seconds"]))))
             self.media.publish(output_key, output_path)
+            self._enqueue_deliveries(job)
             self.api.complete_job(job_id, True, output_key)
             print(f"Highlight {resource_id} available", flush=True)
-            self._deliver(job)
         except Exception as error:
             print(f"Highlight {resource_id} failed: {error}", flush=True)
             self.api.complete_job(job_id, False, error=str(error))
@@ -46,28 +52,39 @@ class HighlightWorker:
             self.media.release(*(path for path in (source_path, output_path) if path is not None))
         return True
 
-    def _deliver(self, job: dict) -> None:
+    def _enqueue_deliveries(self, job: dict) -> None:
         for recipient in job.get("delivery_recipients", []):
-            if self.evolution is None or not self.public_media_base_url:
-                self._report_delivery(job, recipient, False, "Evolution API no está configurada")
-                continue
             media_url = f"{self.public_media_base_url}/public/access/{recipient['access_token']}/highlights/{job['resource_id']}"
-            try:
-                self.evolution.send_video(
-                    recipient["phone_e164"], media_url,
-                    f"Hola {recipient['display_name']}, tu highlight de vivoo ya está listo.",
-                    instance=str(job.get("evolution_instance") or self.evolution.config.instance),
-                )
-                self._report_delivery(job, recipient, True)
-            except Exception as error:
-                # Delivery failures must be retried by the delivery outbox, not mark video processing as failed.
-                self._report_delivery(job, recipient, False, str(error))
+            self.delivery_outbox.enqueue(
+                str(job["job_id"]), str(job["resource_id"]), recipient["phone_e164"],
+                recipient["display_name"], media_url,
+                f"Hola {recipient['display_name']}, tu highlight de vivoo ya está listo.",
+                str(job.get("evolution_instance") or (self.evolution.config.instance if self.evolution else "courtvision")),
+            )
 
-    def _report_delivery(self, job: dict, recipient: dict, succeeded: bool, error: str | None = None) -> None:
+    def _deliver_once(self, item: DeliveryItem) -> None:
+        if item.state == "pending":
+            try:
+                if self.evolution is None or not self.public_media_base_url:
+                    raise RuntimeError("Evolution API no está configurada")
+                self.evolution.send_video(
+                    item.phone_e164, item.media_url, item.caption, instance=item.instance,
+                )
+                self.delivery_outbox.mark_sent(item.id)
+            except Exception as error:
+                self.delivery_outbox.mark_send_failure(item, str(error))
+                print(f"WhatsApp delivery deferred: {error}", flush=True)
+                return
+            item = DeliveryItem(
+                item.id, item.job_id, item.phone_e164, item.display_name, item.media_url,
+                item.caption, item.instance, "sent", item.send_attempts, item.created_at, None,
+            )
         try:
             self.api.report_delivery(
-                job["job_id"], recipient["phone_e164"], recipient["display_name"], succeeded, error,
+                item.job_id, item.phone_e164, item.display_name,
+                item.state == "sent", item.last_error if item.state == "failed" else None,
             )
-        except Exception:
-            # El video ya fue procesado: una caída del callback no debe revertirlo.
-            return
+            self.delivery_outbox.complete(item.id)
+        except Exception as error:
+            # Si el envío ya salió, sólo se reintenta el callback para no duplicar el mensaje.
+            self.delivery_outbox.mark_callback_failure(item.id, str(error))

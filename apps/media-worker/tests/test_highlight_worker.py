@@ -29,3 +29,17 @@ def test_worker_reports_failed_source_without_crashing(tmp_path: Path):
     assert HighlightWorker(api, tmp_path).process_once() is True
     assert api.completed[0][1] is False
     assert "Media fuente no encontrada" in api.completed[0][3]
+
+
+def test_delivery_failure_stays_queued_instead_of_losing_the_message(tmp_path: Path):
+    api = FakeApi()
+    api.lease_next_job = lambda: None
+    worker = HighlightWorker(api, tmp_path, evolution=None, public_media_base_url="http://api")
+    worker.delivery_outbox.enqueue(
+        "00000000-0000-0000-0000-000000000001", "highlight-1", "+5491155550118",
+        "José", "http://api/highlight", "Listo", "vivoo-owner",
+    )
+
+    assert worker.process_once() is True
+    assert worker.delivery_outbox.pending_count() == 1
+    assert api.deliveries == []
