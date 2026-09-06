@@ -131,3 +131,15 @@ jobs:
           test -d "$FEED"
           rsync -az --exclude 'latest*.yml' "$FEED/" vivoo-update:/home/ubuntu/courtvision/infra/deploy/desktop-updates/
           rsync -az --include '*/' --include 'latest*.yml' --exclude '*' "$FEED/" vivoo-update:/home/ubuntu/courtvision/infra/deploy/desktop-updates/
+      - name: Prune superseded update packages
+        if: steps.deploy-config.outputs.enabled == 'true'
+        run: |
+          ssh vivoo-update 'set -eu
+          for update_dir in /home/ubuntu/courtvision/infra/deploy/desktop-updates/darwin/arm64 /home/ubuntu/courtvision/infra/deploy/desktop-updates/win32/x64; do
+            [ -d "$update_dir" ] || continue
+            manifest=$(find "$update_dir" -maxdepth 1 -type f -name "latest*.yml" | head -n 1)
+            [ -f "$manifest" ] || continue
+            version=$(sed -n "s/^version:[[:space:]]*//p" "$manifest" | head -n 1)
+            [ -n "$version" ]
+            find "$update_dir" -maxdepth 1 -type f ! -name "latest*.yml" ! -name "*-${version}-*" -delete
+          done'
