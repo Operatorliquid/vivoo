@@ -2,4 +2,4 @@
 name = "courtvision-media-worker"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["boto3>=1.40"]
+dependencies = ["boto3>=1.43.87"]
