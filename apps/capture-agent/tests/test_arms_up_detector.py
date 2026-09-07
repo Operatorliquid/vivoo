@@ -23,6 +23,18 @@ def test_requires_both_wrists_above_the_shoulders() -> None:
     assert assess_arms_up(pose(230.0, 230.0)).raised is False
 
 
+def test_requires_a_visible_v_instead_of_smash_hands_together() -> None:
+    intentional = pose(150.0, 150.0)
+    smash = pose(150.0, 150.0)
+    smash[9][0] = 148.0
+    smash[10][0] = 152.0
+
+    assert assess_arms_up(intentional).raised is True
+    assessment = assess_arms_up(smash)
+    assert assessment.raised is False
+    assert assessment.wrist_spread_ratio < 0.45
+
+
 def test_rejects_low_confidence_keypoints() -> None:
     assessment = assess_arms_up(pose(150.0, 150.0, confidence=0.2))
     assert assessment.raised is False
@@ -97,3 +109,39 @@ def test_wrist_lift_rejects_static_pose_and_accepts_two_arm_motion() -> None:
     assert tracker.update(1, True, (0.4, 0.46), (0.6, 0.45), 0.5, 0.0, 2.0) is True
     tracker.remove(1)
     assert tracker.update(1, True, (0.4, 0.46), (0.6, 0.45), 0.5, 0.14, 2.1) is False
+
+
+def test_two_deliberate_v_gestures_trigger_at_five_fps_after_release() -> None:
+    wrist_lift = WristLiftTracker(minimum_lift_ratio=0.15, minimum_local_motion=0.10)
+    gate = ArmsUpGate(hold_seconds=1.2, cooldown_seconds=0.0, max_positive_gap_seconds=0.9)
+    latch = GestureRearmLatch(cooldown_seconds=0.0, release_seconds=0.75)
+    triggers: list[float] = []
+
+    def observe(timestamp: float, wrist_y: float, motion: float) -> None:
+        assessment = assess_arms_up(
+            pose(wrist_y, wrist_y),
+            frame_size=(640, 480),
+            min_person_height_ratio=0.06,
+        )
+        qualified = wrist_lift.update(
+            1,
+            assessment.raised,
+            assessment.left_wrist,
+            assessment.right_wrist,
+            assessment.body_height_ratio,
+            motion,
+            timestamp,
+        )
+        candidate = gate.update(qualified, assessment.confidence, timestamp)
+        if latch.update(qualified, candidate is not None, timestamp):
+            triggers.append(timestamp)
+
+    observe(0.0, 240.0, 0.0)
+    for frame in range(1, 9):
+        observe(frame / 5, 150.0, 0.20 if frame == 1 else 0.0)
+    for frame in range(9, 14):
+        observe(frame / 5, 240.0, 0.0)
+    for frame in range(14, 22):
+        observe(frame / 5, 150.0, 0.20 if frame == 14 else 0.0)
+
+    assert triggers == [1.4, 4.0]

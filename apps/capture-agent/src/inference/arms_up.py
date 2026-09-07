@@ -24,6 +24,7 @@ class PoseAssessment:
     inside_roi: bool = True
     left_wrist: tuple[float, float] | None = None
     right_wrist: tuple[float, float] | None = None
+    wrist_spread_ratio: float = 0.0
 
 
 def assess_arms_up(
@@ -33,6 +34,7 @@ def assess_arms_up(
     frame_size: tuple[int, int] | None = None,
     roi: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0),
     min_person_height_ratio: float = 0.0,
+    min_wrist_spread_ratio: float = 0.45,
 ) -> PoseAssessment:
     """Evaluate one COCO-17 pose using body-relative geometry.
 
@@ -69,6 +71,7 @@ def assess_arms_up(
     torso_height = abs(shoulder_mid_y - sum(float(point[1]) for point in visible_hips) / len(visible_hips)) if visible_hips else shoulder_span * 1.35
     body_scale = max(shoulder_span, torso_height, 12.0)
     vertical_margin = max(3.0, body_scale * 0.08)
+    wrist_spread_ratio = abs(float(left_wrist[0]) - float(right_wrist[0])) / body_scale
 
     visible = [
         point for point in keypoints
@@ -103,6 +106,9 @@ def assess_arms_up(
         and float(right_elbow[1]) < float(right_shoulder[1]) + body_scale * 0.22
         and float(left_wrist[1]) < float(left_elbow[1]) - body_scale * 0.05
         and float(right_wrist[1]) < float(right_elbow[1]) - body_scale * 0.05
+        # A deliberate Vivoo gesture is a visible V. During smashes both hands
+        # can rise briefly, but they normally converge around the racket.
+        and wrist_spread_ratio >= min_wrist_spread_ratio
         and inside_roi
         and body_height_ratio >= min_person_height_ratio
     )
@@ -114,6 +120,7 @@ def assess_arms_up(
         inside_roi,
         normalized_left_wrist,
         normalized_right_wrist,
+        wrist_spread_ratio,
     )
 
 

@@ -43,6 +43,7 @@ class AgentConfig:
     pose_rotation_degrees: int = 0
     pose_roi: list[float] = field(default_factory=lambda: [0.0, 0.0, 1.0, 1.0])
     pose_min_person_height_ratio: float = 0.06
+    pose_min_wrist_spread_ratio: float = 0.45
     gesture_hold_seconds: float = 1.2
     gesture_cooldown_seconds: float = 0.0
     gesture_release_seconds: float = 0.75
@@ -93,6 +94,7 @@ def load_config(path: Path) -> AgentConfig:
         pose_rotation_degrees=int(payload.get("pose_rotation_degrees", 0)),
         pose_roi=normalize_roi(payload.get("pose_roi", [0.0, 0.0, 1.0, 1.0])),
         pose_min_person_height_ratio=float(payload.get("pose_min_person_height_ratio", 0.06)),
+        pose_min_wrist_spread_ratio=float(payload.get("pose_min_wrist_spread_ratio", 0.45)),
         gesture_hold_seconds=float(payload.get("gesture_hold_seconds", 1.2)),
         # Migrate the original conservative defaults. Rearming now depends on a
         # clear down/up cycle, so a valid second gesture is no longer hidden for

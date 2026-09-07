@@ -46,6 +46,7 @@ class LocalAgentRuntime:
                 rotation_degrees=self.config.pose_rotation_degrees,
                 roi=tuple(roi),
                 min_person_height_ratio=self.config.pose_min_person_height_ratio,
+                min_wrist_spread_ratio=self.config.pose_min_wrist_spread_ratio,
             ),
             on_gesture=self._handle_gesture,
             on_status=self._gesture_status,
@@ -449,7 +450,8 @@ class LocalAgentRuntime:
         detector_keys = {
             "pose_model", "pose_device", "pose_image_size", "pose_person_confidence",
             "pose_keypoint_confidence", "pose_rotation_degrees", "pose_roi",
-            "pose_min_person_height_ratio", "gesture_hold_seconds",
+            "pose_min_person_height_ratio", "pose_min_wrist_spread_ratio",
+            "gesture_hold_seconds",
             "gesture_cooldown_seconds", "gesture_release_seconds",
             "gesture_min_wrist_lift_ratio", "gesture_max_gap_seconds",
             "gesture_min_local_motion",

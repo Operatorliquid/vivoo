@@ -74,6 +74,7 @@ def serve_local_agent(runtime: MultiCameraSupervisor, host: str = "127.0.0.1", p
                         "keypoint_confidence": selected_runtime.config.pose_keypoint_confidence,
                         "roi": selected_runtime.config.pose_roi,
                         "min_person_height_ratio": selected_runtime.config.pose_min_person_height_ratio,
+                        "min_wrist_spread_ratio": selected_runtime.config.pose_min_wrist_spread_ratio,
                         "hold_seconds": selected_runtime.config.gesture_hold_seconds,
                         "cooldown_seconds": selected_runtime.config.gesture_cooldown_seconds,
                         "release_seconds": selected_runtime.config.gesture_release_seconds,

@@ -454,6 +454,7 @@ export type LocalDetectorConfig = {
     keypoint_confidence: number;
     roi: [number, number, number, number];
     min_person_height_ratio: number;
+    min_wrist_spread_ratio: number;
     hold_seconds: number;
     cooldown_seconds: number;
     max_gap_seconds: number;

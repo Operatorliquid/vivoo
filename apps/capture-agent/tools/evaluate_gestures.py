@@ -20,12 +20,13 @@ def detect_events(video: Path, config: dict[str, object]) -> tuple[list[float], 
     detector = YoloPoseDetector(
         model_name=str(config.get("model", "yolo26n-pose.pt")),
         device=str(config.get("device", "cpu")),
-        image_size=int(config.get("image_size", 640)),
+        image_size=int(config.get("image_size", 960)),
         person_confidence=float(config.get("person_confidence", 0.30)),
         keypoint_confidence=float(config.get("keypoint_confidence", 0.35)),
         rotation_degrees=int(config.get("rotation_degrees", 0)),
         roi=tuple(config.get("roi", [0.0, 0.0, 1.0, 1.0])),
         min_person_height_ratio=float(config.get("min_person_height_ratio", 0.06)),
+        min_wrist_spread_ratio=float(config.get("min_wrist_spread_ratio", 0.45)),
     )
     gates: dict[int, ArmsUpGate] = {}
     wrist_lifts = WristLiftTracker(
@@ -33,8 +34,8 @@ def detect_events(video: Path, config: dict[str, object]) -> tuple[list[float], 
         float(config.get("minimum_local_motion", 0.10)),
     )
     rearm_latch = GestureRearmLatch(
-        float(config.get("cooldown_seconds", 15.0)),
-        float(config.get("release_seconds", 1.5)),
+        float(config.get("cooldown_seconds", 0.0)),
+        float(config.get("release_seconds", 0.75)),
     )
     events: list[float] = []
     stop = threading.Event()
@@ -48,7 +49,7 @@ def detect_events(video: Path, config: dict[str, object]) -> tuple[list[float], 
             gate = gates.setdefault(
                 person.track_id,
                 ArmsUpGate(
-                    hold_seconds=float(config.get("hold_seconds", 0.8)),
+                    hold_seconds=float(config.get("hold_seconds", 1.2)),
                     cooldown_seconds=0.0,
                     max_positive_gap_seconds=float(config.get("max_gap_seconds", 0.9)),
                 ),

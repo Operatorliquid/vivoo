@@ -48,6 +48,7 @@ class YoloPoseDetector:
         rotation_degrees: int = 0,
         roi: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0),
         min_person_height_ratio: float = 0.06,
+        min_wrist_spread_ratio: float = 0.45,
     ) -> None:
         self.model_name = model_name
         self.device = device
@@ -57,6 +58,7 @@ class YoloPoseDetector:
         self.rotation_degrees = rotation_degrees
         self.roi = roi
         self.min_person_height_ratio = min_person_height_ratio
+        self.min_wrist_spread_ratio = min_wrist_spread_ratio
         self._model = None
         self._tracker = CentroidTracker()
 
@@ -117,6 +119,7 @@ class YoloPoseDetector:
                     frame_size=(frame_width, frame_height),
                     roi=self.roi,
                     min_person_height_ratio=self.min_person_height_ratio,
+                    min_wrist_spread_ratio=self.min_wrist_spread_ratio,
                 )
                 for person in people
             ]

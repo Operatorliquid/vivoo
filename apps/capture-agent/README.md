@@ -1,4 +1,4 @@
-# CourtVision Desktop
+# Vivoo Desktop
 
 Este proceso se instala en la PC o mini PC que está dentro de la red de la
 cancha. Es el único componente que accede a la cámara RTSP. La API cloud nunca
@@ -12,7 +12,7 @@ intenta conectarse a una IP privada de la cancha.
 - genera desde ese búfer la fuente exacta de los 30 segundos anteriores a cada highlight;
 - sube el partido completo al cloud cuando se detiene la grabación o cambia la sesión;
 - conserva una cola local de eventos si internet se corta;
-- envía heartbeat y eventos a CourtVision cuando vuelve la conexión;
+- envía heartbeat y eventos a Vivoo cuando vuelve la conexión;
 - ofrece una vista local para el dashboard en `http://127.0.0.1:8781`.
 - detecta ambos brazos levantados con pose estimation durante una sesión activa;
 - mantiene seguimiento temporal separado por persona y descarta cuerpos fuera de la zona calibrada;
@@ -61,6 +61,20 @@ El comando devuelve recall, gestos perdidos, falsos positivos por hora y
 latencia. Sale con código 0 únicamente cuando alcanza al menos 99% de recall y
 como máximo 0,1 falsos positivos por hora. Los videos sin gestos son necesarios
 para medir saques, remates y movimientos normales como casos negativos.
+
+Para una primera prueba negativa sin copiar videos al repositorio, el evaluador
+también acepta anotaciones COCO-17. El resultado es un límite superior: como el
+dataset no contiene píxeles, se asume que la comprobación de movimiento local
+pasó. Ejemplo con las poses CC BY 4.0 de
+[PadelTracker100](https://doi.org/10.5281/zenodo.17020011):
+
+```bash
+.venv/bin/python tools/evaluate_coco_pose.py labels/*_pose.json
+```
+
+Esta prueba sirve para encontrar falsos candidatos durante saques y remates. La
+aceptación comercial todavía requiere videos propios de cada ángulo de cámara,
+con gestos intencionales etiquetados mediante `evaluate_gestures.py`.
 
 ## Empaquetado inicial
 

@@ -2,14 +2,18 @@
   "detector": {
     "model": "yolo26n-pose.pt",
     "device": "cpu",
-    "image_size": 640,
+    "image_size": 960,
     "person_confidence": 0.3,
     "keypoint_confidence": 0.35,
     "rotation_degrees": 0,
     "roi": [0.0, 0.0, 1.0, 1.0],
     "min_person_height_ratio": 0.06,
-    "hold_seconds": 0.8,
-    "cooldown_seconds": 15.0,
+    "min_wrist_spread_ratio": 0.45,
+    "hold_seconds": 1.2,
+    "cooldown_seconds": 0.0,
+    "release_seconds": 0.75,
+    "minimum_wrist_lift_ratio": 0.15,
+    "minimum_local_motion": 0.10,
     "max_gap_seconds": 0.9
   },
   "videos": [
