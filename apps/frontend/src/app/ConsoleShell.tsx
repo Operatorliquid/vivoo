@@ -10,13 +10,14 @@ import type { OwnerConsole } from './useOwnerConsole';
 import type { OwnerSession } from '../lib/api';
 import { initialsOf } from '../lib/court';
 
-type NavItem = { section: Exclude<ConsoleSection, 'court'>; label: string; icon: string; matches: ConsoleSection[] };
+type NavItem = { section: Exclude<ConsoleSection, 'court'>; label: string; tabLabel?: string; icon: string; matches: ConsoleSection[] };
 
 /** Destinos de la barra inferior en móvil y del primer grupo del riel. */
 const NAV: NavItem[] = [
   { section: 'overview', label: 'Operación', icon: 'board', matches: ['overview'] },
   { section: 'courts', label: 'Canchas', icon: 'court', matches: ['courts', 'court'] },
   { section: 'library', label: 'Biblioteca', icon: 'clip', matches: ['library'] },
+  { section: 'featured', label: 'Favoritos del mes', tabLabel: 'Favoritos', icon: 'star', matches: ['featured'] },
   { section: 'activity', label: 'Actividad', icon: 'activity', matches: ['activity'] },
 ];
 
@@ -74,7 +75,7 @@ export function ConsoleShell({
         onClick={() => goToSection(item.section)}
       >
         <Icon name={item.icon} size={variant === 'tab' ? 20 : 18} />
-        <span>{item.label}</span>
+        <span>{variant === 'tab' ? item.tabLabel ?? item.label : item.label}</span>
         {badge > 0 ? (
           <em className={`${variant}-nav__badge ${item.section === 'notifications' ? 'is-alert' : ''}`}>{badge}</em>
         ) : null}

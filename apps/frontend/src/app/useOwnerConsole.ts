@@ -2,13 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createOwnerCamera, createOwnerField, deleteAllOwnerNotifications, deleteOwnerCamera, deleteOwnerField, deleteOwnerHighlight,
   deleteOwnerHighlights, deleteOwnerRecording, deleteOwnerRecordings,
-  getOwnerActivity, getOwnerCameras, getOwnerDashboard, getOwnerFields, getOwnerHighlights, getOwnerNotifications, getOwnerProfile, getOwnerRecordings,
+  getOwnerActivity, getOwnerCameras, getOwnerDashboard, getOwnerFields, getOwnerHighlights, getOwnerMonthlyFavorites, getOwnerNotifications, getOwnerProfile, getOwnerRecordings,
   markAllOwnerNotificationsRead, markOwnerNotificationRead, updateOwnerButton, updateOwnerCamera,
-  startOwnerFieldRecording, stopOwnerFieldRecording, updateOwnerClub, updateOwnerField, updateOwnerProfile,
+  startOwnerFieldRecording, stopOwnerFieldRecording, updateOwnerClub, updateOwnerField, updateOwnerMonthlyFavorites, updateOwnerProfile,
 } from '../lib/api';
 import type {
   CreatedCamera, CreatedField, OwnerActivity, OwnerCamera, OwnerDashboard, OwnerField, OwnerHighlight, OwnerLibraryRecording, OwnerNotification,
-  OwnerProfile, OwnerSession,
+  OwnerMonthlyFavoritesPage, OwnerProfile, OwnerSession,
 } from '../lib/api';
 import { clockNow } from '../lib/court';
 
@@ -110,6 +110,7 @@ export function useOwnerConsole(session: OwnerSession) {
   const [cameras, setCameras] = useState<OwnerCamera[]>([]);
   const [highlights, setHighlights] = useState<OwnerHighlight[]>([]);
   const [recordings, setRecordings] = useState<OwnerLibraryRecording[]>([]);
+  const [monthlyFavorites, setMonthlyFavorites] = useState<OwnerMonthlyFavoritesPage | null>(null);
   const [profile, setProfile] = useState<OwnerProfile | null>(null);
   const [notifications, setNotifications] = useState<OwnerNotification[]>([]);
   const [activity, setActivity] = useState<OwnerActivity[]>([]);
@@ -129,15 +130,16 @@ export function useOwnerConsole(session: OwnerSession) {
   const loadAll = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     if (mode === 'refresh') setRefreshing(true); else setLoading(true);
     try {
-      const [nextDashboard, fieldResponse, cameraResponse, highlightResponse, recordingResponse, nextProfile, notificationResponse, activityResponse] = await Promise.all([
+      const [nextDashboard, fieldResponse, cameraResponse, highlightResponse, recordingResponse, nextFavorites, nextProfile, notificationResponse, activityResponse] = await Promise.all([
         getOwnerDashboard(token), getOwnerFields(token), getOwnerCameras(token),
-        getOwnerHighlights(token), getOwnerRecordings(token), getOwnerProfile(token), getOwnerNotifications(token), getOwnerActivity(token),
+        getOwnerHighlights(token), getOwnerRecordings(token), getOwnerMonthlyFavorites(token), getOwnerProfile(token), getOwnerNotifications(token), getOwnerActivity(token),
       ]);
       setDashboard(nextDashboard);
       setFields(fieldResponse.items);
       setCameras(cameraResponse.items);
       setHighlights((current) => mergeOwnerHighlights(current, highlightResponse.items));
       setRecordings((current) => mergeOwnerRecordings(current, recordingResponse.items));
+      setMonthlyFavorites(nextFavorites);
       highlightStates.current = new Map(highlightResponse.items.map((item) => [item.id, item.status]));
       setProfile(nextProfile);
       setNotifications(notificationResponse.items);
@@ -162,14 +164,15 @@ export function useOwnerConsole(session: OwnerSession) {
 
   /** Relee la infraestructura tras una mutación, sin pantalla de carga. */
   const resync = useCallback(async () => {
-    const [fieldResponse, cameraResponse, nextDashboard, highlightResponse, recordingResponse, activityResponse] = await Promise.all([
-      getOwnerFields(token), getOwnerCameras(token), getOwnerDashboard(token), getOwnerHighlights(token), getOwnerRecordings(token), getOwnerActivity(token),
+    const [fieldResponse, cameraResponse, nextDashboard, highlightResponse, recordingResponse, favoriteResponse, activityResponse] = await Promise.all([
+      getOwnerFields(token), getOwnerCameras(token), getOwnerDashboard(token), getOwnerHighlights(token), getOwnerRecordings(token), getOwnerMonthlyFavorites(token), getOwnerActivity(token),
     ]);
     setFields(fieldResponse.items);
     setCameras(cameraResponse.items);
     setDashboard(nextDashboard);
     setHighlights((current) => mergeOwnerHighlights(current, highlightResponse.items));
     setRecordings((current) => mergeOwnerRecordings(current, recordingResponse.items));
+    setMonthlyFavorites(favoriteResponse);
     highlightStates.current = new Map(highlightResponse.items.map((item) => [item.id, item.status]));
     setActivity(activityResponse.items);
     setSyncedAt(clockNow());
@@ -391,6 +394,18 @@ export function useOwnerConsole(session: OwnerSession) {
     }
   }, [token, announce]);
 
+  const saveMonthlyFavorites = useCallback(async (highlightIds: string[]) => {
+    try {
+      const updated = await updateOwnerMonthlyFavorites(token, highlightIds);
+      setMonthlyFavorites(updated);
+      announce('success', highlightIds.length > 0 ? 'Favoritos del mes publicados.' : 'Publicación de favoritos vaciada.');
+      return true;
+    } catch (error) {
+      announce('error', message(error, 'No pudimos guardar los favoritos del mes.'));
+      return false;
+    }
+  }, [token, announce]);
+
   const readNotification = useCallback(async (notificationId: string) => {
     try {
       const updated = await markOwnerNotificationRead(token, notificationId);
@@ -420,7 +435,7 @@ export function useOwnerConsole(session: OwnerSession) {
 
   return {
     ownerToken: token,
-    dashboard, fields, cameras, highlights, recordings, profile, notifications, activity,
+    dashboard, fields, cameras, highlights, recordings, monthlyFavorites, profile, notifications, activity,
     loading, refreshing, loadError, syncedAt, notice,
     dismissNotice: () => setNotice(null),
     announce,
@@ -431,6 +446,7 @@ export function useOwnerConsole(session: OwnerSession) {
       setFieldRecording, removeHighlight, removeHighlights, removeLibraryItems,
       createCamera, saveCamera, removeCamera,
       saveClub, saveProfile,
+      saveMonthlyFavorites,
       readNotification, readAllNotifications, clearNotifications,
     },
   };

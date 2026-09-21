@@ -3,6 +3,7 @@ import { OwnerConsoleApp } from './OwnerConsole';
 import { LoginPage } from '../features/auth/LoginPage';
 import { QrPage } from '../features/public/QrPage';
 import { PlayerPage } from '../features/public/PlayerPage';
+import { FeaturedPage } from '../features/public/FeaturedPage';
 import { goToView, pathToSection, pathToView } from './routes';
 import type { ConsoleSection, View } from './routes';
 import { isInvalidSessionError, logoutOwner, refreshOwnerSession } from '../lib/api';
@@ -48,6 +49,7 @@ function OwnerRoot() {
 
   if (view === 'qr') return <QrPage />;
   if (view === 'player') return <PlayerPage />;
+  if (view === 'featuredPublic') return <FeaturedPage />;
 
   if (!authChecked) {
     return (

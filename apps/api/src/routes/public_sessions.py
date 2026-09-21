@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Header
 from domain.schemas import FieldContext, PlayerJoinResponse, PlayerMediaPage, SessionJoinResponse, StartSessionRequest
 from services.media_storage import media_storage
@@ -39,6 +41,16 @@ def get_full_recording(access_token: str):
 
 @router.get("/access/{access_token}/highlights/{highlight_id}")
 def get_highlight(access_token: str, highlight_id: str):
-    from uuid import UUID
     _, storage_key = store.resolve_player_media(access_token, UUID(highlight_id))
     return media_storage.playback_response(storage_key, "courtvision-highlight.mp4")
+
+
+@router.get("/clubs/{public_slug}/monthly-favorites")
+def get_monthly_favorites(public_slug: str):
+    return store.public_monthly_favorites(public_slug)
+
+
+@router.get("/clubs/{public_slug}/monthly-favorites/{highlight_id}/media")
+def get_monthly_favorite_media(public_slug: str, highlight_id: UUID):
+    storage_key = store.resolve_public_monthly_favorite_media(public_slug, highlight_id)
+    return media_storage.playback_response(storage_key, f"vivoo-destacado-{str(highlight_id)[:8]}.mp4")

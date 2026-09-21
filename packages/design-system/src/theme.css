@@ -98,6 +98,8 @@
   --control-active: var(--neutral-900);
   --overlay: rgba(16, 20, 17, .38);
   --media-canvas: var(--neutral-950);
+  --media-scrim: linear-gradient(180deg, rgba(0, 0, 0, .18), transparent 42%, rgba(0, 0, 0, .38));
+  --media-label-bg: rgba(16, 20, 17, .62);
   --subtle-pattern: rgba(23, 28, 24, .022);
   --brand-glow: rgba(0, 15, 255, .16);
   --active-wash: rgba(255, 255, 255, .22);
@@ -221,6 +223,8 @@
   --control-active: #eef0ea;
   --overlay: rgba(3, 6, 4, .66);
   --media-canvas: #050806;
+  --media-scrim: linear-gradient(180deg, rgba(0, 0, 0, .24), transparent 42%, rgba(0, 0, 0, .48));
+  --media-label-bg: rgba(3, 6, 4, .72);
   --subtle-pattern: rgba(255, 255, 255, .025);
   --brand-glow: rgba(83, 96, 255, .2);
   --active-wash: rgba(255, 255, 255, .12);

@@ -35,6 +35,10 @@ class RecordingBatchDelete(BaseModel):
     recording_ids: list[UUID] = Field(min_length=1, max_length=100)
 
 
+class MonthlyFavoritesUpdate(BaseModel):
+    highlight_ids: list[UUID] = Field(default_factory=list, max_length=200)
+
+
 class FieldCreate(BaseModel):
     name: str = Field(min_length=2, max_length=60)
     sport_code: Literal["padel", "football"] = "padel"
@@ -281,6 +285,16 @@ def highlights(current_owner: dict[str, str] = Depends(get_current_owner)):
             item["media_path"] = path
             item["download_path"] = f"{path}&download=1"
     return {"items": items}
+
+
+@router.get("/monthly-favorites")
+def monthly_favorites(current_owner: dict[str, str] = Depends(get_current_owner)):
+    return store.owner_monthly_favorites(current_owner["owner_id"])
+
+
+@router.put("/monthly-favorites")
+def update_monthly_favorites(payload: MonthlyFavoritesUpdate, current_owner: dict[str, str] = Depends(get_current_owner)):
+    return store.set_owner_monthly_favorites(current_owner["owner_id"], payload.highlight_ids)
 
 
 @router.post("/highlights/delete-batch")

@@ -3,12 +3,15 @@ import hashlib
 import hmac
 import json
 import os
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from secrets import token_urlsafe
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from auth.local_auth import token_fingerprint
+from config import settings
 from db.configuration import ConfigurationPersistence, FileConfigurationPersistence
 from domain.schemas import CaptureEventRequest, PresignUploadRequest, StartSessionRequest
 from fastapi import HTTPException
@@ -34,6 +37,12 @@ FULL_RECORDING_RETENTION = timedelta(days=2)
 PLAYER_ACCESS_TTL = timedelta(hours=max(1, int(os.getenv("PLAYER_ACCESS_TTL_HOURS", "168"))))
 AGENT_HEARTBEAT_TIMEOUT = timedelta(seconds=max(60, int(os.getenv("AGENT_HEARTBEAT_TIMEOUT_SECONDS", "95"))))
 PROCESSING_LEASE_TIMEOUT = timedelta(seconds=max(30, int(os.getenv("PROCESSING_LEASE_TIMEOUT_SECONDS", "120"))))
+MONTHLY_FAVORITE_RETENTION = timedelta(days=30)
+
+
+def _public_slug(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii").lower()
+    return re.sub(r"(^-|-$)", "", re.sub(r"[^a-z0-9]+", "-", normalized)) or "club"
 
 
 @dataclass
@@ -112,6 +121,13 @@ class PlayerAccessRecord:
     revoked_at: datetime | None = None
 
 
+@dataclass
+class MonthlyFavoriteRecord:
+    highlight_id: UUID
+    selected_at: datetime
+    expires_at: datetime
+
+
 class LocalStore:
     """Deterministic local provider; production adapters persist the same contracts in RDS."""
 
@@ -137,8 +153,9 @@ class LocalStore:
         self.events_by_key: dict[str, tuple[UUID, UUID]] = {}
         self.idempotency: dict[str, UUID] = {}
         self.activity_events: list[dict[str, object]] = []
+        self.monthly_favorites: list[MonthlyFavoriteRecord] = []
         club_id = str(DEMO_CLUB_ID) if self._seed_demo else str(uuid5(NAMESPACE_URL, f"tveo:club:{owner_id}"))
-        self.club = {"id": club_id, "name": "", "city": "", "logo_data_url": "", "fields_count": 4 if self._seed_demo else 0}
+        self.club = {"id": club_id, "name": "", "city": "", "logo_data_url": "", "public_slug": "", "fields_count": 4 if self._seed_demo else 0}
         self.profile = {
             "id": owner_id,
             "email": email,
@@ -261,6 +278,14 @@ class LocalStore:
             "events_by_key": {key: [str(value[0]), str(value[1])] for key, value in self.events_by_key.items()},
             "idempotency": {key: str(value) for key, value in self.idempotency.items()},
             "activity_events": self.activity_events,
+            "monthly_favorites": [
+                {
+                    "highlight_id": str(item.highlight_id),
+                    "selected_at": item.selected_at.isoformat(),
+                    "expires_at": item.expires_at.isoformat(),
+                }
+                for item in self.monthly_favorites
+            ],
         }
         self.persistence.save_runtime_state(self.profile["id"], payload)
 
@@ -339,6 +364,14 @@ class LocalStore:
         }
         self.idempotency = {str(key): UUID(str(value)) for key, value in dict(payload.get("idempotency", {})).items()}
         self.activity_events = [dict(item) for item in payload.get("activity_events", [])]
+        self.monthly_favorites = [
+            MonthlyFavoriteRecord(
+                UUID(str(item["highlight_id"])),
+                datetime.fromisoformat(str(item["selected_at"])),
+                datetime.fromisoformat(str(item["expires_at"])),
+            )
+            for item in payload.get("monthly_favorites", [])
+        ]
 
     def _activity(
         self,
@@ -984,6 +1017,74 @@ class LocalStore:
             })
         return items
 
+    def _active_monthly_favorites(self, now: datetime | None = None) -> list[MonthlyFavoriteRecord]:
+        reference = now or datetime.now(timezone.utc)
+        active = [
+            item for item in self.monthly_favorites
+            if item.expires_at > reference
+            and item.highlight_id in self.highlights
+            and self.highlights[item.highlight_id].status == "available"
+            and bool(self.highlights[item.highlight_id].storage_key)
+        ]
+        if len(active) != len(self.monthly_favorites):
+            self.monthly_favorites = active
+            self._persist_runtime()
+        return active
+
+    def owner_monthly_favorites(self, owner_id: str) -> dict[str, object]:
+        if owner_id != self.profile["id"]:
+            raise HTTPException(status_code=404, detail="Favoritos no encontrados")
+        highlights = {item["id"]: item for item in self.owner_highlights(owner_id)}
+        items = []
+        for favorite in self._active_monthly_favorites():
+            highlight = highlights.get(str(favorite.highlight_id))
+            if highlight:
+                items.append({
+                    **highlight,
+                    "selected_at": favorite.selected_at.isoformat(),
+                    "expires_at": favorite.expires_at.isoformat(),
+                })
+        return {
+            "club_name": str(self.club.get("name") or "Tu club"),
+            "club_city": str(self.club.get("city") or ""),
+            "club_logo_data_url": str(self.club.get("logo_data_url") or ""),
+            "items": items,
+        }
+
+    def set_owner_monthly_favorites(self, owner_id: str, highlight_ids: list[UUID]) -> dict[str, object]:
+        if owner_id != self.profile["id"]:
+            raise HTTPException(status_code=404, detail="Favoritos no encontrados")
+        unique_ids = list(dict.fromkeys(highlight_ids))
+        invalid = [
+            highlight_id for highlight_id in unique_ids
+            if highlight_id not in self.highlights
+            or self.highlights[highlight_id].status != "available"
+            or not self.highlights[highlight_id].storage_key
+        ]
+        if invalid:
+            raise HTTPException(status_code=422, detail="Solo podés publicar highlights listos")
+
+        now = datetime.now(timezone.utc)
+        current = {item.highlight_id: item for item in self._active_monthly_favorites(now)}
+        self.monthly_favorites = [
+            current.get(highlight_id) or MonthlyFavoriteRecord(
+                highlight_id=highlight_id,
+                selected_at=now,
+                expires_at=now + MONTHLY_FAVORITE_RETENTION,
+            )
+            for highlight_id in unique_ids
+        ]
+        self._persist_runtime()
+        return self.owner_monthly_favorites(owner_id)
+
+    def resolve_public_monthly_favorite_media(self, highlight_id: UUID) -> str:
+        if not any(item.highlight_id == highlight_id for item in self._active_monthly_favorites()):
+            raise HTTPException(status_code=404, detail="Highlight no encontrado")
+        highlight = self.highlights.get(highlight_id)
+        if highlight is None or not highlight.storage_key:
+            raise HTTPException(status_code=404, detail="Video no disponible")
+        return highlight.storage_key
+
     def owner_recordings(self, owner_id: str) -> list[dict[str, object]]:
         if owner_id != self.profile["id"]:
             raise HTTPException(status_code=404, detail="Partidos no encontrados")
@@ -1138,6 +1239,7 @@ class LocalStore:
     def delete_owner_highlight(self, owner_id: str, highlight_id: UUID) -> None:
         self.owner_highlight_storage_keys(owner_id, highlight_id)
         highlight = self.highlights.pop(highlight_id)
+        self.monthly_favorites = [item for item in self.monthly_favorites if item.highlight_id != highlight_id]
         session = self.sessions.get(highlight.session_id)
         if session:
             field_id, field_name = self._session_field(session)
@@ -1619,6 +1721,59 @@ class StoreRegistry:
     def purge_expired_recordings(self, delete_object, now: datetime | None = None) -> int:
         return sum(tenant.purge_expired_recordings(delete_object, now) for tenant in self._all_tenants())
 
+    def _ensure_public_slug(self, tenant: LocalStore) -> str:
+        current = str(tenant.club.get("public_slug") or "").strip()
+        if current:
+            return current
+        base = _public_slug(str(tenant.club.get("name") or "club"))
+        used = {
+            str(item.club.get("public_slug") or "")
+            for item in self._all_tenants()
+            if item is not tenant
+        }
+        candidate = base if base not in used else f"{base}-{str(tenant.club['id'])[:6].lower()}"
+        tenant.club["public_slug"] = candidate
+        tenant._persist_configuration()
+        return candidate
+
+    def owner_monthly_favorites(self, owner_id: str) -> dict[str, object]:
+        tenant = self.for_owner(str(owner_id))
+        slug = self._ensure_public_slug(tenant)
+        payload = tenant.owner_monthly_favorites(owner_id)
+        return {
+            **payload,
+            "public_slug": slug,
+            "public_path": f"/{slug}/destacados",
+            "public_url": f"{settings.public_app_base_url}/{slug}/destacados",
+        }
+
+    def set_owner_monthly_favorites(self, owner_id: str, highlight_ids: list[UUID]) -> dict[str, object]:
+        tenant = self.for_owner(str(owner_id))
+        tenant.set_owner_monthly_favorites(owner_id, highlight_ids)
+        return self.owner_monthly_favorites(owner_id)
+
+    def public_monthly_favorites(self, public_slug: str) -> dict[str, object]:
+        tenant = self._tenant_for_public_slug(public_slug)
+        payload = tenant.owner_monthly_favorites(str(tenant.profile["id"]))
+        items = [
+            {
+                "id": item["id"],
+                "title": item["title"],
+                "field_name": item["field_name"],
+                "players": item["players"],
+                "occurred_at": item["occurred_at"],
+                "duration_seconds": item["duration_seconds"],
+                "selected_at": item["selected_at"],
+                "expires_at": item["expires_at"],
+                "media_path": f"/public/clubs/{public_slug}/monthly-favorites/{item['id']}/media",
+            }
+            for item in payload["items"]
+        ]
+        return {**payload, "public_slug": public_slug, "items": items}
+
+    def resolve_public_monthly_favorite_media(self, public_slug: str, highlight_id: UUID) -> str:
+        return self._tenant_for_public_slug(public_slug).resolve_public_monthly_favorite_media(highlight_id)
+
     def register_owner(self, owner_id: str, email: str, display_name: str) -> LocalStore:
         tenant = self._tenants.get(owner_id)
         if tenant is None:
@@ -1677,6 +1832,13 @@ class StoreRegistry:
             if any(item["field_token"] == field_token for item in tenant.fields):
                 return tenant
         raise HTTPException(status_code=404, detail="QR de cancha no encontrado")
+
+    def _tenant_for_public_slug(self, public_slug: str) -> LocalStore:
+        normalized = _public_slug(public_slug)
+        for tenant in self._all_tenants():
+            if self._ensure_public_slug(tenant) == normalized:
+                return tenant
+        raise HTTPException(status_code=404, detail="Club no encontrado")
 
     def _tenant_for_session(self, session_id: UUID) -> LocalStore:
         for tenant in self._all_tenants():

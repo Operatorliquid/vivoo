@@ -9,6 +9,7 @@ import './styles/shell.css';
 import './styles/board.css';
 import './styles/detail.css';
 import './styles/public.css';
+import './styles/favorites.css';
 import './styles/admin.css';
 import { App } from './app/App';
 

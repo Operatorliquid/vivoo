@@ -69,6 +69,9 @@ Clases: `.t-hero`, `.t-display`, `.t-title`, `.t-heading`, `.t-body`, `.t-sm`,
   cancha no captura, listado de canchas y rosquilla de reparto por estado, y
   abajo momentos y actividad.
 - **Canchas**: tarjeta con filtros por estado y listado en columnas.
+- **Favoritos del mes**: editor de highlights listos en grilla, selección explícita
+  y una tarjeta lateral de publicación con enlace y QR. La página pública usa el
+  mismo sistema visual en una composición editorial y sin controles operativos.
 - **Detalle de cancha**: monitor de cámara y vínculo con el equipo local a la
   izquierda; captura, nombre, QR, botón físico y zona irreversible a la derecha,
   cada bloque en su propia tarjeta.

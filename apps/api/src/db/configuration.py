@@ -130,6 +130,14 @@ class ConfigurationPersistence:
             ADD COLUMN IF NOT EXISTS logo_data_url text NOT NULL DEFAULT ''
             """,
             """
+            ALTER TABLE courtvision_clubs
+            ADD COLUMN IF NOT EXISTS public_slug text NOT NULL DEFAULT ''
+            """,
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS courtvision_clubs_public_slug_idx
+            ON courtvision_clubs (public_slug) WHERE public_slug <> ''
+            """,
+            """
             CREATE TABLE IF NOT EXISTS courtvision_runtime_state (
                 owner_id text PRIMARY KEY,
                 payload jsonb NOT NULL,
@@ -254,7 +262,7 @@ class ConfigurationPersistence:
     def load(self, owner_id: str) -> dict[str, Any] | None:
         with self._connect() as connection:
             club = connection.execute(
-                "SELECT id, name, city, logo_data_url, fields_count FROM courtvision_clubs WHERE owner_id = %s",
+                "SELECT id, name, city, logo_data_url, fields_count, public_slug FROM courtvision_clubs WHERE owner_id = %s",
                 (owner_id,),
             ).fetchone()
             fields = connection.execute(
@@ -302,7 +310,7 @@ class ConfigurationPersistence:
         migration_required = any(row[8] and not self.cipher.is_encrypted(row[8]) for row in cameras)
         migration_required = migration_required or any(row[5] and not self.cipher.is_encrypted(row[5]) for row in buttons)
         return {
-            "club": {"id": club[0], "name": club[1], "city": club[2], "logo_data_url": club[3], "fields_count": club[4]} if club else None,
+            "club": {"id": club[0], "name": club[1], "city": club[2], "logo_data_url": club[3], "fields_count": club[4], "public_slug": club[5]} if club else None,
             "fields": [
                 {
                     "id": row[0],
@@ -377,14 +385,14 @@ class ConfigurationPersistence:
         with self._connect() as connection:
             connection.execute(
                 """
-                INSERT INTO courtvision_clubs (owner_id, id, name, city, logo_data_url, fields_count, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, now())
+                INSERT INTO courtvision_clubs (owner_id, id, name, city, logo_data_url, fields_count, public_slug, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, now())
                 ON CONFLICT (owner_id) DO UPDATE SET
                     id = EXCLUDED.id, name = EXCLUDED.name, city = EXCLUDED.city,
                     logo_data_url = EXCLUDED.logo_data_url,
-                    fields_count = EXCLUDED.fields_count, updated_at = now()
+                    fields_count = EXCLUDED.fields_count, public_slug = EXCLUDED.public_slug, updated_at = now()
                 """,
-                (owner_id, club["id"], club.get("name", ""), club.get("city", ""), club.get("logo_data_url", ""), len(fields)),
+                (owner_id, club["id"], club.get("name", ""), club.get("city", ""), club.get("logo_data_url", ""), len(fields), club.get("public_slug", "")),
             )
             connection.execute("DELETE FROM courtvision_fields WHERE owner_id = %s", (owner_id,))
             connection.execute("DELETE FROM courtvision_cameras WHERE owner_id = %s", (owner_id,))

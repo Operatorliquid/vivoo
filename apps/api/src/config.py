@@ -18,6 +18,7 @@ class Settings:
     local_media_root: str = os.getenv("LOCAL_MEDIA_ROOT", "/tmp/courtvision-media")
     presign_ttl_seconds: int = int(os.getenv("MEDIA_PRESIGN_TTL_SECONDS", "900"))
     public_media_base_url: str = os.getenv("PUBLIC_MEDIA_BASE_URL", "http://127.0.0.1:8000")
+    public_app_base_url: str = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:5173").rstrip("/")
     evolution_api_url: str = os.getenv("EVOLUTION_API_URL", "")
     evolution_api_key: str = os.getenv("EVOLUTION_API_KEY", "")
     evolution_instance: str = os.getenv("EVOLUTION_INSTANCE", "courtvision")

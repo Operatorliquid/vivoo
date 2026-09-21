@@ -117,6 +117,40 @@ export type OwnerHighlight = {
   media_path: string | null;
   download_path: string | null;
 };
+export type OwnerMonthlyFavorite = Pick<OwnerHighlight,
+  'id' | 'display_id' | 'title' | 'field_id' | 'field_name' | 'session_id' | 'session_code' |
+  'session_started_at' | 'players' | 'occurred_at' | 'duration_seconds' | 'confidence' | 'status'
+> & {
+  selected_at: string;
+  expires_at: string;
+};
+export type OwnerMonthlyFavoritesPage = {
+  club_name: string;
+  club_city: string;
+  club_logo_data_url: string;
+  public_slug: string;
+  public_path: string;
+  public_url: string;
+  items: OwnerMonthlyFavorite[];
+};
+export type PublicMonthlyFavorite = {
+  id: string;
+  title: string;
+  field_name: string;
+  players: string[];
+  occurred_at: string;
+  duration_seconds: number;
+  selected_at: string;
+  expires_at: string;
+  media_path: string;
+};
+export type PublicMonthlyFavoritesPage = {
+  club_name: string;
+  club_city: string;
+  club_logo_data_url: string;
+  public_slug: string;
+  items: PublicMonthlyFavorite[];
+};
 export type OwnerLibraryRecording = {
   id: string;
   display_id: string;
@@ -302,6 +336,18 @@ export function getOwnerDashboard(token: string) {
 
 export function getOwnerHighlights(token: string) {
   return request<{ items: OwnerHighlight[] }>('/owner/highlights', { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function getOwnerMonthlyFavorites(token: string) {
+  return request<OwnerMonthlyFavoritesPage>('/owner/monthly-favorites', { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function updateOwnerMonthlyFavorites(token: string, highlightIds: string[]) {
+  return request<OwnerMonthlyFavoritesPage>('/owner/monthly-favorites', {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ highlight_ids: highlightIds }),
+  });
 }
 
 export function getOwnerRecordings(token: string) {
@@ -525,6 +571,10 @@ export function deleteAllOwnerNotifications(token: string) {
 
 export function getFieldContext(fieldToken: string) {
   return request<FieldContext>(`/public/fields/${fieldToken}`);
+}
+
+export function getPublicMonthlyFavorites(publicSlug: string) {
+  return request<PublicMonthlyFavoritesPage>(`/public/clubs/${encodeURIComponent(publicSlug)}/monthly-favorites`);
 }
 
 export function startSession(fieldToken: string, payload: { display_name: string; phone_e164: string; recording_consent: true; messaging_consent: boolean }, requestId: string) {

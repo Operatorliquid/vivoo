@@ -8,6 +8,7 @@ import { OverviewPage } from '../features/overview/OverviewPage';
 import { CourtsPage } from '../features/courts/CourtsPage';
 import { CourtDetailPage } from '../features/courts/CourtDetailPage';
 import { LibraryPage } from '../features/library/LibraryPage';
+import { FavoritesPage } from '../features/favorites/FavoritesPage';
 import { ActivityPage } from '../features/notifications/NotificationsPage';
 import { NotificationCenterPage } from '../features/notifications/NotificationCenterPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
@@ -62,6 +63,7 @@ export function OwnerConsoleApp({
       {section === 'overview' ? <OverviewPage console={data} /> : null}
       {section === 'courts' ? <CourtsPage console={data} /> : null}
       {section === 'library' ? <LibraryPage console={data} /> : null}
+      {section === 'featured' ? <FavoritesPage console={data} /> : null}
       {section === 'activity' ? <ActivityPage console={data} /> : null}
       {section === 'notifications' ? <NotificationCenterPage console={data} /> : null}
       {section === 'settings' ? <SettingsPage console={data} /> : null}
@@ -101,6 +103,11 @@ function titleFor(
       return { title: ctx.courtName ?? 'Cancha', context: club };
     case 'library':
       return { title: 'Biblioteca', context: 'Momentos capturados en el club' };
+    case 'featured':
+      return {
+        title: 'Favoritos del mes',
+        context: ctx.loading ? 'Sincronizando…' : 'Selección pública del club',
+      };
     case 'notifications':
       return { title: 'Notificaciones', context: club };
     case 'activity':

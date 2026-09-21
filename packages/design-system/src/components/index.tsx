@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ButtonHTMLAttributes, CSSProperties, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 import { createPortal } from 'react-dom';
-import { Activity, Camera, Cctv, Ellipsis, Eye, EyeOff, ImageUp, ScanLine } from 'lucide-react';
+import { Activity, Camera, Cctv, Download, Ellipsis, ExternalLink, Eye, EyeOff, ImageUp, ScanLine, Star } from 'lucide-react';
 
 /* ==========================================================================
    Estado de captura — el vocabulario central del producto.
@@ -55,7 +55,7 @@ const iconPaths: Record<string, ReactNode> = {
 };
 
 export function Icon({ name, size = 18, className = '' }: { name: string; size?: number; className?: string }) {
-  const LibraryIcon = name === 'camera' ? Camera : name === 'court' ? Cctv : name === 'more' ? Ellipsis : name === 'activity' ? Activity : name === 'imageUpload' ? ImageUp : name === 'scan' ? ScanLine : name === 'eye' ? Eye : name === 'eyeOff' ? EyeOff : null;
+  const LibraryIcon = name === 'camera' ? Camera : name === 'court' ? Cctv : name === 'more' ? Ellipsis : name === 'activity' ? Activity : name === 'imageUpload' ? ImageUp : name === 'scan' ? ScanLine : name === 'eye' ? Eye : name === 'eyeOff' ? EyeOff : name === 'star' ? Star : name === 'download' ? Download : name === 'externalLink' ? ExternalLink : null;
   if (LibraryIcon) {
     return <LibraryIcon className={`cv-icon ${className}`} size={size} strokeWidth={1.75} aria-hidden="true" focusable="false" />;
   }

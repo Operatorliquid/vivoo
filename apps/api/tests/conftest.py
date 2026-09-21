@@ -17,6 +17,7 @@ def reset_local_store():
     initial_activity_events = deepcopy(store.activity_events)
     initial_buttons = deepcopy(store.buttons)
     initial_button_secrets = deepcopy(store.button_secrets)
+    initial_monthly_favorites = deepcopy(store.monthly_favorites)
     store.players.clear()
     store.player_access.clear()
     store.sessions.clear()
@@ -30,6 +31,7 @@ def reset_local_store():
     store.events_by_key.clear()
     store.idempotency.clear()
     store.activity_events.clear()
+    store.monthly_favorites.clear()
     yield
     store.fields = initial_fields
     store.cameras = initial_cameras
@@ -39,3 +41,4 @@ def reset_local_store():
     store.activity_events = initial_activity_events
     store.buttons = initial_buttons
     store.button_secrets = initial_button_secrets
+    store.monthly_favorites = initial_monthly_favorites
