@@ -19,3 +19,13 @@ def test_production_accepts_independent_strong_secrets() -> None:
         data_encryption_key="data-" + "e" * 48,
     )
     configuration.validate_production()
+
+
+def test_public_origin_drives_cors_and_trusted_host() -> None:
+    configuration = Settings(
+        public_app_base_url="https://app.vivoo.example",
+        cors_allowed_origins="",
+        trusted_hosts="api,api.internal",
+    )
+    assert configuration.cors_origins == ["https://app.vivoo.example"]
+    assert configuration.allowed_hosts == ["api", "api.internal", "app.vivoo.example"]

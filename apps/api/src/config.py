@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 
 @dataclass(frozen=True)
@@ -36,11 +37,14 @@ class Settings:
 
     @property
     def cors_origins(self) -> list[str]:
-        return [value.strip() for value in self.cors_allowed_origins.split(",") if value.strip()]
+        configured = [value.strip().rstrip("/") for value in self.cors_allowed_origins.split(",") if value.strip()]
+        return list(dict.fromkeys([*configured, self.public_app_base_url]))
 
     @property
     def allowed_hosts(self) -> list[str]:
-        return [value.strip() for value in self.trusted_hosts.split(",") if value.strip()]
+        configured = [value.strip() for value in self.trusted_hosts.split(",") if value.strip()]
+        public_host = urlsplit(self.public_app_base_url).hostname
+        return list(dict.fromkeys([*configured, *([public_host] if public_host else [])]))
 
     def validate_production(self) -> None:
         if self.app_env != "production":

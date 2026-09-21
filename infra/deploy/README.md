@@ -9,10 +9,11 @@ HTTP/3) deben estar permitidos.
 docker compose --env-file .env -f infra/deploy/compose.yml up -d --build
 ```
 
-Para una prueba local sin dominio puede usarse `SITE_ADDRESS=http://localhost` y
-`PUBLIC_BASE_URL=http://localhost`. Esa configuración no es válida para producción.
-En producción, `SITE_ADDRESS`, `PUBLIC_BASE_URL`, `CORS_ALLOWED_ORIGINS` y
-`TRUSTED_HOSTS` deben contener el dominio HTTPS real, sin comodines.
+Para una prueba local sin dominio puede usarse `PUBLIC_BASE_URL=http://localhost`.
+Esa configuración no es válida para producción. En producción, `PUBLIC_BASE_URL`
+es la única fuente del origen público: Caddy, CORS, hosts permitidos, enlaces y
+QR se derivan de esa variable. Cuando exista el dominio, se cambia una sola vez
+por su URL HTTPS completa y se recrean `api` y `gateway`.
 
 PostgreSQL queda en una red interna de Docker y utiliza el volumen `courtvision_postgres`. La configuración del club, canchas, cámaras y botones se persiste allí; los videos usan `courtvision_media` como almacenamiento local temporal hasta conectar S3.
 
