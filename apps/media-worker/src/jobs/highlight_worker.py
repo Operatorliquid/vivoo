@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from clipping.highlight_processor import ClipRequest, assemble_highlight
+from clipping.highlight_processor import ClipRequest, WatermarkRequest, assemble_highlight, watermark_recording
 from delivery.evolution_client import EvolutionApiClient
 from delivery.outbox import DeliveryOutbox, DeliveryItem
 from storage.media_repository import MediaRepository
@@ -10,13 +10,15 @@ from worker_api_client import WorkerApiClient
 
 
 class HighlightWorker:
-    def __init__(self, api: WorkerApiClient, media_root: Path, evolution: EvolutionApiClient | None = None, public_media_base_url: str = "", media_repository: MediaRepository | None = None) -> None:
+    def __init__(self, api: WorkerApiClient, media_root: Path, evolution: EvolutionApiClient | None = None, public_media_base_url: str = "", media_repository: MediaRepository | None = None, watermark_path: Path | None = None) -> None:
         self.api = api
         self.media_root = media_root
         self.media = media_repository or MediaRepository(media_root)
         self.evolution = evolution
         self.public_media_base_url = public_media_base_url.rstrip("/")
+        self.watermark_path = watermark_path or Path(__file__).resolve().parents[2] / "assets" / "vivoo-watermark.png"
         self.delivery_outbox = DeliveryOutbox(media_root / ".vivoo-delivery-outbox.sqlite3")
+        self.active_job_id: str | None = None
 
     def process_once(self) -> bool:
         delivery = self.delivery_outbox.claim_next()
@@ -27,8 +29,11 @@ class HighlightWorker:
         if job is None:
             return False
         job_id = job["job_id"]
+        self.active_job_id = str(job_id)
         resource_id = job.get("resource_id", job_id)
-        print(f"Processing highlight {resource_id} (attempt {job.get('attempts', 1)})", flush=True)
+        job_type = str(job.get("job_type") or "assemble_highlight")
+        label = "partido" if job_type == "watermark_recording" else "highlight"
+        print(f"Processing {label} {resource_id} (attempt {job.get('attempts', 1)})", flush=True)
         source_key = job.get("source_storage_key")
         source_path: Path | None = None
         output_path: Path | None = None
@@ -40,16 +45,30 @@ class HighlightWorker:
                 raise FileNotFoundError(f"Media fuente no encontrada: {source_key}")
             output_key = job["output_storage_key"]
             output_path = self.media.working_path(output_key)
-            assemble_highlight(ClipRequest(source_path, output_path, 0, max(1, int(job["duration_seconds"]))))
+            if job_type == "watermark_recording":
+                watermark_recording(WatermarkRequest(source_path, output_path, self.watermark_path))
+            elif job_type == "assemble_highlight":
+                assemble_highlight(ClipRequest(
+                    source_path, output_path, 0, max(1, int(job["duration_seconds"])), self.watermark_path,
+                ))
+            else:
+                raise RuntimeError(f"Tipo de procesamiento desconocido: {job_type}")
             self.media.publish(output_key, output_path)
-            self._enqueue_deliveries(job)
+            if job_type == "assemble_highlight":
+                self._enqueue_deliveries(job)
             self.api.complete_job(job_id, True, output_key)
-            print(f"Highlight {resource_id} available", flush=True)
+            if job_type == "watermark_recording" and source_key != output_key:
+                try:
+                    self.media.delete(source_key)
+                except Exception as cleanup_error:
+                    print(f"Deferred raw recording cleanup: {cleanup_error}", flush=True)
+            print(f"{label.capitalize()} {resource_id} available", flush=True)
         except Exception as error:
-            print(f"Highlight {resource_id} failed: {error}", flush=True)
+            print(f"{label.capitalize()} {resource_id} failed: {error}", flush=True)
             self.api.complete_job(job_id, False, error=str(error))
         finally:
             self.media.release(*(path for path in (source_path, output_path) if path is not None))
+            self.active_job_id = None
         return True
 
     def _enqueue_deliveries(self, job: dict) -> None:

@@ -15,6 +15,12 @@ def worker_heartbeat(
     metadata: dict[str, object] = Body(default_factory=dict),
     _: dict[str, str] = Depends(get_current_worker),
 ):
+    active_job_id = metadata.get("active_job_id")
+    if active_job_id:
+        try:
+            store.renew_job_lease(UUID(str(active_job_id)))
+        except (ValueError, TypeError):
+            pass
     deleted = store.purge_expired_recordings(media_storage.delete)
     health_service.record_worker({
         "state": "running", "expired_recordings_deleted": deleted,

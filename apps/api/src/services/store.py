@@ -1136,11 +1136,24 @@ class LocalStore:
         return session_id, recording, session
 
     def reconcile_owner_recordings(self, owner_id: str, object_exists) -> None:
-        """Recover uploads that reached durable storage before their final acknowledgement."""
+        """Recover branded outputs that reached storage before the worker callback."""
         changed = False
         for recording in self.recordings.values():
-            if recording.status == "processing" and object_exists(recording.storage_key):
+            if recording.status != "processing":
+                continue
+            job = next((
+                item for item in self.processing_jobs.values()
+                if item.job_type == "watermark_recording" and item.resource_id == recording.id
+            ), None)
+            output_key = f"recordings/{recording.id}.mp4"
+            if job is not None and object_exists(output_key):
+                self.recordings_by_key.pop(recording.storage_key, None)
+                recording.storage_key = output_key
+                self.recordings_by_key[output_key] = recording.id
                 recording.status = "available"
+                job.status = "succeeded"
+                job.last_error = None
+                job.leased_at = None
                 session = self.sessions.get(recording.session_id)
                 if session:
                     field_id, field_name = self._session_field(session)
@@ -1174,7 +1187,7 @@ class LocalStore:
         deleted = 0
         for session_id, recording in list(self.recordings.items()):
             session = self.sessions.get(session_id)
-            if session is None or recording.status != "available" or not self._full_recording_expired(session, current_time):
+            if session is None or not self._full_recording_expired(session, current_time):
                 continue
             try:
                 if recording.storage_key:
@@ -1489,15 +1502,12 @@ class LocalStore:
             return
         for recording in self.recordings.values():
             if recording.id == recording_id:
-                recording.status = "available"
-                session = self.sessions.get(recording.session_id)
-                if session:
-                    field_id, field_name = self._session_field(session)
-                    self._activity(
-                        f"recording:{recording.id}:available", "recording", "success", "Partido disponible",
-                        f"{field_name} · el video completo terminó de subirse", datetime.now(timezone.utc),
-                        field_id=field_id, session_id=session.id, href=f"/fields/{field_id}",
-                    )
+                job_key = f"watermark_recording:{recording.id}"
+                if job_key not in self.processing_jobs_by_key:
+                    job = ProcessingJobRecord(uuid4(), "watermark_recording", recording.id, job_key)
+                    self.processing_jobs[job.id] = job
+                    self.processing_jobs_by_key[job_key] = job.id
+                recording.status = "processing"
                 self._persist_runtime()
                 return
 
@@ -1560,16 +1570,54 @@ class LocalStore:
         job = next((item for item in self.processing_jobs.values() if item.status in {"queued", "retryable"}), None)
         if job is None:
             return None
-        highlight = self.highlights.get(job.resource_id)
-        if highlight is None:
-            job.status = "failed"
-            job.last_error = "Highlight no encontrado"
-            return None
-        session = self.sessions.get(highlight.session_id)
-        if session is None:
-            job.status = "failed"
-            job.last_error = "Sesión del highlight no encontrada"
-            return None
+        if job.job_type == "watermark_recording":
+            recording = next((item for item in self.recordings.values() if item.id == job.resource_id), None)
+            if recording is None:
+                job.status = "failed"
+                job.last_error = "Partido no encontrado"
+                self._persist_runtime()
+                return None
+            session = self.sessions.get(recording.session_id)
+            if session is None:
+                job.status = "failed"
+                job.last_error = "Sesión del partido no encontrada"
+                self._persist_runtime()
+                return None
+            payload = {
+                "source_storage_key": recording.storage_key,
+                "duration_seconds": 0,
+                "output_storage_key": f"recordings/{recording.id}.mp4",
+                "evolution_instance": None,
+                "delivery_recipients": [],
+            }
+        else:
+            highlight = self.highlights.get(job.resource_id)
+            if highlight is None:
+                job.status = "failed"
+                job.last_error = "Highlight no encontrado"
+                self._persist_runtime()
+                return None
+            session = self.sessions.get(highlight.session_id)
+            if session is None:
+                job.status = "failed"
+                job.last_error = "Sesión del highlight no encontrada"
+                self._persist_runtime()
+                return None
+            payload = {
+                "source_storage_key": highlight.source_storage_key,
+                "duration_seconds": highlight.duration_seconds,
+                "output_storage_key": f"highlights/{highlight.id}.mp4",
+                "evolution_instance": owner_instance_name(str(self.profile["id"])),
+                "delivery_recipients": [
+                    {
+                        "phone_e164": self.players[player_id].phone_e164,
+                        "display_name": self.players[player_id].display_name,
+                        "access_token": self._register_player_access(session, self.players[player_id]),
+                    }
+                    for player_id in session.player_ids
+                    if player_id in self.players and self.players[player_id].messaging_consent
+                ],
+            }
         job.status = "leased"
         job.attempts += 1
         job.leased_at = now
@@ -1579,25 +1627,43 @@ class LocalStore:
             "job_type": job.job_type,
             "resource_id": str(job.resource_id),
             "attempts": job.attempts,
-            "source_storage_key": getattr(highlight, "source_storage_key", None),
-            "duration_seconds": highlight.duration_seconds,
-            "output_storage_key": f"highlights/{highlight.id}.mp4",
-            "evolution_instance": owner_instance_name(str(self.profile["id"])),
-            "delivery_recipients": [
-                {
-                    "phone_e164": self.players[player_id].phone_e164,
-                    "display_name": self.players[player_id].display_name,
-                    "access_token": self._register_player_access(session, self.players[player_id]),
-                }
-                for player_id in session.player_ids
-                if player_id in self.players and self.players[player_id].messaging_consent
-            ],
+            **payload,
         }
 
     def complete_job(self, job_id: UUID, succeeded: bool, output_storage_key: str | None = None, error: str | None = None) -> None:
         job = self.processing_jobs.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="Job no encontrado")
+        if job.job_type == "watermark_recording":
+            recording = next((item for item in self.recordings.values() if item.id == job.resource_id), None)
+            if recording is None:
+                raise HTTPException(status_code=404, detail="Partido no encontrado")
+            session = self.sessions.get(recording.session_id)
+            if succeeded:
+                job.status = "succeeded"
+                job.last_error = None
+                if output_storage_key:
+                    self.recordings_by_key.pop(recording.storage_key, None)
+                    recording.storage_key = output_storage_key
+                    self.recordings_by_key[recording.storage_key] = recording.id
+                recording.status = "available"
+            else:
+                job.status = "retryable" if job.attempts < 3 else "dead_letter"
+                job.last_error = error or "Procesamiento fallido"
+                if job.status == "dead_letter":
+                    recording.status = "failed"
+            job.leased_at = None
+            if session and (succeeded or job.status == "dead_letter"):
+                field_id, field_name = self._session_field(session)
+                self._activity(
+                    f"recording:{recording.id}:processed", "recording", "success" if succeeded else "error",
+                    "Partido disponible" if succeeded else "Falló el procesamiento del partido",
+                    f"{field_name} · video completo con marca Vivoo" if succeeded else f"{field_name} · {job.last_error}",
+                    datetime.now(timezone.utc), field_id=field_id, session_id=session.id,
+                    href=f"/library?recording={recording.id}",
+                )
+            self._persist_runtime()
+            return
         highlight = self.highlights.get(job.resource_id)
         if highlight is None:
             raise HTTPException(status_code=404, detail="Highlight no encontrado")
@@ -1624,6 +1690,11 @@ class LocalStore:
                 href=f"/library?highlight={highlight.id}",
             )
         self._persist_runtime()
+
+    def renew_job_lease(self, job_id: UUID) -> None:
+        job = self.processing_jobs.get(job_id)
+        if job is not None and job.status == "leased":
+            job.leased_at = datetime.now(timezone.utc)
 
     def record_delivery(self, job_id: UUID, phone_e164: str, display_name: str, succeeded: bool, error: str | None = None) -> None:
         job = self.processing_jobs.get(job_id)
@@ -1708,7 +1779,7 @@ class StoreRegistry:
                         return job
                 return None
             return lease
-        if name in {"complete_job", "record_delivery"}:
+        if name in {"complete_job", "record_delivery", "renew_job_lease"}:
             return lambda job_id, *args, **kwargs: getattr(self._tenant_for_job(job_id), name)(job_id, *args, **kwargs)
         return getattr(primary, name)
 

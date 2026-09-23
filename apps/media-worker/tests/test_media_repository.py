@@ -19,6 +19,9 @@ def test_s3_repository_downloads_and_publishes_private_media(tmp_path: Path, mon
         def upload_file(self, source, bucket, key, ExtraArgs):
             calls.append(("upload", bucket, key, ExtraArgs, Path(source).read_bytes()))
 
+        def delete_object(self, Bucket, Key):
+            calls.append(("delete", Bucket, Key))
+
     monkeypatch.setitem(sys.modules, "boto3", SimpleNamespace(client=lambda service, region_name: FakeS3()))
     repository = MediaRepository(tmp_path, "private-media", "sa-east-1")
 
@@ -26,11 +29,13 @@ def test_s3_repository_downloads_and_publishes_private_media(tmp_path: Path, mon
     output = repository.working_path("highlights/one.mp4")
     output.write_bytes(b"highlight")
     repository.publish("highlights/one.mp4", output)
+    repository.delete("sessions/one/highlight_source/source.mp4")
     repository.release(source, output)
 
     assert calls[0] == ("download", "private-media", "sessions/one/highlight_source/source.mp4")
     assert calls[1][0:3] == ("upload", "private-media", "highlights/one.mp4")
     assert calls[1][3] == {"ContentType": "video/mp4"}
+    assert calls[2] == ("delete", "private-media", "sessions/one/highlight_source/source.mp4")
     assert not source.exists()
     assert not output.exists()
 

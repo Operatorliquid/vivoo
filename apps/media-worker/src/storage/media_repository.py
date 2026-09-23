@@ -49,6 +49,17 @@ class MediaRepository:
             ExtraArgs={"ContentType": "video/mp4"},
         )
 
+    def delete(self, storage_key: str) -> None:
+        relative = self._safe_key(storage_key)
+        if self.s3_bucket:
+            import boto3
+
+            boto3.client("s3", region_name=self.aws_region).delete_object(
+                Bucket=self.s3_bucket,
+                Key=relative.as_posix(),
+            )
+        (self.local_root / relative).unlink(missing_ok=True)
+
     def release(self, *paths: Path) -> None:
         if not self.s3_bucket:
             return

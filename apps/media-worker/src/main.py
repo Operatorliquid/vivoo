@@ -1,6 +1,7 @@
 """Standalone media worker entrypoint for local and AWS edge deployments."""
 
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -37,13 +38,21 @@ def build_worker() -> HighlightWorker:
 def main() -> None:
     worker = build_worker()
     print("vivoo media worker ready")
-    last_heartbeat = 0.0
+
+    def heartbeat_loop() -> None:
+        while True:
+            try:
+                worker.api.heartbeat({
+                    "delivery_queue_depth": worker.delivery_outbox.pending_count(),
+                    "active_job_id": worker.active_job_id,
+                })
+            except WorkerApiError:
+                pass
+            time.sleep(15)
+
+    threading.Thread(target=heartbeat_loop, name="worker-heartbeat", daemon=True).start()
     while True:
         try:
-            now = time.monotonic()
-            if now - last_heartbeat >= 15:
-                worker.api.heartbeat({"delivery_queue_depth": worker.delivery_outbox.pending_count()})
-                last_heartbeat = now
             processed = worker.process_once()
         except WorkerApiError:
             processed = False

@@ -194,7 +194,21 @@ def _create_available_recording(index: int = 0) -> tuple[dict, Path]:
         headers={"Authorization": "Bearer courtvision-local-agent"},
     )
     assert completed.status_code == 204
-    return session.json(), media_path
+    job = client.get(
+        "/worker/jobs/next",
+        headers={"Authorization": "Bearer courtvision-local-worker"},
+    ).json()
+    assert job["job_type"] == "watermark_recording"
+    output_path = Path(settings.local_media_root) / job["output_storage_key"]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(f"watermarked-whole-match-{index}".encode())
+    assert client.post(
+        f"/worker/jobs/{job['job_id']}/complete",
+        json={"succeeded": True, "output_storage_key": job["output_storage_key"]},
+        headers={"Authorization": "Bearer courtvision-local-worker"},
+    ).status_code == 204
+    media_path.unlink(missing_ok=True)
+    return session.json(), output_path
 
 
 def test_owner_library_exposes_full_recordings_for_playback_download_and_delete() -> None:
@@ -212,7 +226,7 @@ def test_owner_library_exposes_full_recordings_for_playback_download_and_delete(
 
         playback = client.get(item["media_path"])
         assert playback.status_code == 200
-        assert playback.content == b"whole-match-0"
+        assert playback.content == b"watermarked-whole-match-0"
         download = client.get(item["download_path"])
         assert download.status_code == 200
         assert download.headers["content-disposition"].startswith("attachment")

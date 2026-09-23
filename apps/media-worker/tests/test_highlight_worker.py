@@ -43,3 +43,30 @@ def test_delivery_failure_stays_queued_instead_of_losing_the_message(tmp_path: P
     assert worker.process_once() is True
     assert worker.delivery_outbox.pending_count() == 1
     assert api.deliveries == []
+
+
+def test_full_recording_is_watermarked_before_becoming_available(tmp_path: Path, monkeypatch):
+    api = FakeApi()
+    api.lease_next_job = lambda: {
+        "job_id": "00000000-0000-0000-0000-000000000002",
+        "job_type": "watermark_recording",
+        "resource_id": "00000000-0000-0000-0000-000000000003",
+        "source_storage_key": "sessions/one/recording/source.mp4",
+        "output_storage_key": "recordings/one.mp4",
+        "duration_seconds": 0,
+    }
+    source = tmp_path / "sessions/one/recording/source.mp4"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"raw-match")
+
+    def fake_watermark(request):
+        request.output_path.parent.mkdir(parents=True, exist_ok=True)
+        request.output_path.write_bytes(b"vivoo-watermarked-match")
+        return request.output_path
+
+    monkeypatch.setattr("jobs.highlight_worker.watermark_recording", fake_watermark)
+
+    assert HighlightWorker(api, tmp_path).process_once() is True
+    assert api.completed[0][1:3] == (True, "recordings/one.mp4")
+    assert not source.exists()
+    assert (tmp_path / "recordings/one.mp4").read_bytes() == b"vivoo-watermarked-match"

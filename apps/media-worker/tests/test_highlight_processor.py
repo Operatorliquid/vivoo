@@ -19,3 +19,17 @@ def test_rejects_invalid_clip_boundaries() -> None:
         build_ffmpeg_command(ClipRequest(Path("source.mp4"), Path("out.mp4"), -1, 30))
     with pytest.raises(ValueError):
         build_ffmpeg_command(ClipRequest(Path("source.mp4"), Path("out.mp4"), 0, 0))
+
+
+def test_watermarked_highlight_is_baked_with_h264_instead_of_stream_copy(tmp_path: Path) -> None:
+    watermark = tmp_path / "vivoo.png"
+    watermark.write_bytes(b"png")
+
+    command = build_ffmpeg_command(ClipRequest(
+        Path("source.mp4"), Path("out.mp4"), 0, 30, watermark,
+    ))
+
+    assert "-filter_complex" in command
+    assert "overlay=" in command[command.index("-filter_complex") + 1]
+    assert command[command.index("-c:v") + 1] == "libx264"
+    assert "copy" not in command

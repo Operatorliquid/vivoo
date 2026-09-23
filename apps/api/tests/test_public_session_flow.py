@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from uuid import UUID
 
+from config import settings
 from domain.schemas import PresignUploadRequest
 from fastapi.testclient import TestClient
 from main import app
@@ -95,6 +97,17 @@ def test_player_access_page_exposes_full_recording_and_highlights() -> None:
         'checksum': 'b31e6b0dabd618d2d0279207bb6693bda956ab2a6fe629abb2f33bf236be9e71',
     }, headers={'Authorization': 'Bearer courtvision-local-agent'})
     assert completed.status_code == 204
+    store.sessions[UUID(session.json()['session_id'])].ended_at = datetime.now(timezone.utc)
+    recording_job = client.get('/worker/jobs/next', headers={'Authorization': 'Bearer courtvision-local-worker'}).json()
+    assert recording_job['job_type'] == 'watermark_recording'
+    branded_path = Path(settings.local_media_root) / recording_job['output_storage_key']
+    branded_path.parent.mkdir(parents=True, exist_ok=True)
+    branded_path.write_bytes(b'watermarked-whole-match')
+    assert client.post(
+        f"/worker/jobs/{recording_job['job_id']}/complete",
+        json={'succeeded': True, 'output_storage_key': recording_job['output_storage_key']},
+        headers={'Authorization': 'Bearer courtvision-local-worker'},
+    ).status_code == 204
     event = client.post(f"/agent/sessions/{session.json()['session_id']}/events", json={
         'source_id': 'player-access-event-01',
         'event_type': 'physical_button',
@@ -106,6 +119,8 @@ def test_player_access_page_exposes_full_recording_and_highlights() -> None:
     assert page.json()['recording_status'] == 'available'
     assert page.json()['recording_path'].endswith('/recording')
     assert page.json()['highlights'][0]['status'] == 'processing'
+    branded_path.unlink(missing_ok=True)
+    (Path(settings.local_media_root) / storage_key).unlink(missing_ok=True)
 
 
 def test_recording_retry_tracks_the_new_checksum_until_completion() -> None:
@@ -133,7 +148,13 @@ def test_recording_retry_tracks_the_new_checksum_until_completion() -> None:
     assert first_key not in store.recordings_by_key
     assert store.recordings_by_key[second_key] == recording.id
     store.mark_media_upload_available(second_key)
+    assert recording.status == 'processing'
+    job = store.lease_next_job()
+    assert job is not None
+    assert job['job_type'] == 'watermark_recording'
+    store.complete_job(UUID(job['job_id']), True, job['output_storage_key'])
     assert recording.status == 'available'
+    assert recording.storage_key == job['output_storage_key']
 
 
 def test_event_is_idempotent_for_same_source() -> None:

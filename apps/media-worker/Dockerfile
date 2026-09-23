@@ -12,6 +12,7 @@ RUN apt-get update \
     && pip install --no-cache-dir "boto3>=1.40"
 
 COPY --chown=vivoo:vivoo apps/media-worker/src ./src
+COPY --chown=vivoo:vivoo apps/media-worker/assets ./assets
 
 ENV PYTHONPATH=/app/src
 USER vivoo
