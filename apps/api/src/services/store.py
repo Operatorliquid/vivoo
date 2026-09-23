@@ -64,6 +64,8 @@ class SessionRecord:
     player_ids: list[UUID] = field(default_factory=list)
     ended_at: datetime | None = None
     started_by: str = "player"
+    field_slug: str = ""
+    field_name: str = ""
 
 
 @dataclass
@@ -241,6 +243,7 @@ class LocalStore:
                     "sport_code": item.sport_code, "started_at": item.started_at.isoformat(),
                     "player_ids": [str(value) for value in item.player_ids],
                     "ended_at": item.ended_at.isoformat() if item.ended_at else None, "started_by": item.started_by,
+                    "field_slug": item.field_slug, "field_name": item.field_name,
                 }
                 for item in self.sessions.values()
             ],
@@ -323,6 +326,8 @@ class LocalStore:
                 player_ids=[UUID(str(value)) for value in item.get("player_ids", [])],
                 ended_at=datetime.fromisoformat(str(item["ended_at"])) if item.get("ended_at") else None,
                 started_by=str(item.get("started_by", "player")),
+                field_slug=str(item.get("field_slug", "")),
+                field_name=str(item.get("field_name", "")),
             )
             self.sessions[session.id] = session
             self.sessions_by_token[session.token] = session.id
@@ -404,9 +409,23 @@ class LocalStore:
         self.activity_events = self.activity_events[:1000]
 
     def _session_field(self, session: SessionRecord) -> tuple[str, str]:
-        field_id = self._field_slug(session.field_id)
+        field_id = session.field_slug or self._field_slug(session.field_id)
         field = next((item for item in self.fields if item["id"] == field_id), None)
-        return field_id, str(field["name"]) if field else "Cancha"
+        if field is not None:
+            return field_id, str(field["name"])
+        if session.field_name:
+            return field_id, session.field_name
+        for event in self.activity_events:
+            if str(event.get("session_id") or "") != str(session.id):
+                continue
+            historical_id = str(event.get("field_id") or field_id)
+            if str(event.get("kind") or "") not in {"recording", "highlight"}:
+                continue
+            detail = str(event.get("detail") or "")
+            historical_name = detail.split(" · ", 1)[0].strip()
+            if historical_id or historical_name:
+                return historical_id, historical_name or "Cancha eliminada"
+        return field_id, "Cancha eliminada"
 
     def field_context(self, field_token: str):
         field = next((item for item in self.fields if item["field_token"] == field_token), None)
@@ -420,6 +439,7 @@ class LocalStore:
         recording_status = self._recording_status(active, camera)
         return {
             "field_id": field_id,
+            "field_slug": str(field["id"]),
             "club_id": UUID(str(self.club["id"])),
             "venue_id": VENUE_ID if self._seed_demo else uuid5(NAMESPACE_URL, f"tveo:venue:{self.club['id']}"),
             "camera_id": CAMERA_IDS.get(camera["id"], uuid5(NAMESPACE_URL, f"courtvision:camera:{camera['id']}")) if camera else None,
@@ -627,12 +647,18 @@ class LocalStore:
         field = next((item for item in self.fields if item["id"] == field_id), None)
         if field is None:
             raise HTTPException(status_code=404, detail="Cancha no encontrada")
+        field_uuid = self._field_uuid(str(field["field_token"]))
+        for session in self.sessions.values():
+            if session.field_id == field_uuid:
+                session.field_slug = field_id
+                session.field_name = str(field["name"])
         self.fields.remove(field)
         self.cameras = [camera for camera in self.cameras if camera["field_id"] != field_id]
         self.buttons.pop(field_id, None)
         self.button_secrets.pop(field_id, None)
         self.club["fields_count"] = len(self.fields)
         self._persist_configuration()
+        self._persist_runtime()
 
     def update_owner_button(self, owner_id: str, field_id: str, device_id: str, secret: str) -> dict[str, object]:
         if owner_id != self.profile["id"]:
@@ -859,6 +885,8 @@ class LocalStore:
                 sport_code=str(field_record["sport_code"]),
                 started_at=datetime.now(timezone.utc),
                 started_by="owner",
+                field_slug=field_id,
+                field_name=str(field_record["name"]),
             )
             self.sessions[active.id] = active
             self.sessions_by_token[active.token] = active.id
@@ -992,8 +1020,7 @@ class LocalStore:
             session = self.sessions.get(highlight.session_id)
             if session is None:
                 continue
-            field_id = self._field_slug(session.field_id)
-            field = next((item for item in self.fields if item["id"] == field_id), None)
+            field_id, field_name = self._session_field(session)
             players = [
                 self.players[player_id].display_name
                 for player_id in session.player_ids
@@ -1004,7 +1031,7 @@ class LocalStore:
                 "display_id": f"#CV-{str(highlight.id)[:4].upper()}",
                 "title": "Momento destacado",
                 "field_id": field_id,
-                "field_name": str(field["name"]) if field else "Cancha",
+                "field_name": field_name,
                 "session_id": str(session.id),
                 "session_code": str(session.id)[:8].upper(),
                 "session_started_at": session.started_at.isoformat(),
@@ -1093,10 +1120,7 @@ class LocalStore:
             session = self.sessions.get(recording.session_id)
             if session is None or self._full_recording_expired(session):
                 continue
-            field_id = self._field_slug(session.field_id)
-            field = next((item for item in self.fields if item["id"] == field_id), None)
-            if field is None:
-                continue
+            field_id, field_name = self._session_field(session)
             ended_at = session.ended_at
             duration_seconds = max(0, int(((ended_at or datetime.now(timezone.utc)) - session.started_at).total_seconds()))
             players = [
@@ -1109,7 +1133,7 @@ class LocalStore:
                 "display_id": f"#PT-{str(recording.id)[:4].upper()}",
                 "title": "Partido completo",
                 "field_id": field_id,
-                "field_name": str(field["name"]),
+                "field_name": field_name,
                 "session_id": str(session.id),
                 "session_code": str(session.id)[:8].upper(),
                 "session_started_at": session.started_at.isoformat(),
@@ -1131,7 +1155,7 @@ class LocalStore:
             raise HTTPException(status_code=404, detail="Partido no encontrado")
         session_id, recording = found
         session = self.sessions.get(session_id)
-        if session is None or not any(item["id"] == self._field_slug(session.field_id) for item in self.fields):
+        if session is None:
             raise HTTPException(status_code=404, detail="Partido no encontrado")
         return session_id, recording, session
 
@@ -1232,7 +1256,7 @@ class LocalStore:
         if highlight is None or highlight.status != "available" or not highlight.storage_key:
             raise HTTPException(status_code=404, detail="Video no disponible")
         session = self.sessions.get(highlight.session_id)
-        if session is None or not any(item["id"] == self._field_slug(session.field_id) for item in self.fields):
+        if session is None:
             raise HTTPException(status_code=404, detail="Momento no encontrado")
         return highlight.storage_key
 
@@ -1243,7 +1267,7 @@ class LocalStore:
         if highlight is None:
             raise HTTPException(status_code=404, detail="Momento no encontrado")
         session = self.sessions.get(highlight.session_id)
-        if session is None or not any(item["id"] == self._field_slug(session.field_id) for item in self.fields):
+        if session is None:
             raise HTTPException(status_code=404, detail="Momento no encontrado")
         if highlight.status == "processing":
             raise HTTPException(status_code=409, detail="Esperá a que el video termine de procesarse para eliminarlo")
@@ -1297,7 +1321,17 @@ class LocalStore:
                     f"{old_field_name} · comenzó un nuevo partido", now,
                     field_id=old_field_id, session_id=active.id, href=f"/fields/{old_field_id}",
                 )
-            session = SessionRecord(uuid4(), token_urlsafe(24), context["field_id"], context["camera_id"], context["sport_code"], now, [], None, "player")
+            session = SessionRecord(
+                id=uuid4(),
+                token=token_urlsafe(24),
+                field_id=context["field_id"],
+                camera_id=context["camera_id"],
+                sport_code=context["sport_code"],
+                started_at=now,
+                started_by="player",
+                field_slug=context["field_slug"],
+                field_name=context["field_name"],
+            )
         session.player_ids.append(player.id)
         self.players[player.id] = player
         access_token = self._register_player_access(session, player)

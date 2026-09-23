@@ -60,7 +60,10 @@ def test_owner_library_exposes_scoped_playback_and_download() -> None:
         assert completed.status_code == 204
         assert client.get("/owner/highlights").status_code == 401
 
-        response = client.get("/owner/highlights", headers=owner_headers())
+        headers = owner_headers()
+        assert client.delete("/owner/fields/field-01", headers=headers).status_code == 204
+
+        response = client.get("/owner/highlights", headers=headers)
         assert response.status_code == 200
         item = response.json()["items"][0]
         assert item["id"] == event.json()["highlight_id"]
@@ -83,7 +86,7 @@ def test_owner_library_exposes_scoped_playback_and_download() -> None:
         assert client.get(invalid_ticket).status_code == 401
 
         assert client.delete(f"/owner/highlights/{item['id']}").status_code == 401
-        deleted = client.delete(f"/owner/highlights/{item['id']}", headers=owner_headers())
+        deleted = client.delete(f"/owner/highlights/{item['id']}", headers=headers)
         assert deleted.status_code == 204
         assert not media_path.exists()
         assert not source_path.exists()
@@ -215,7 +218,10 @@ def test_owner_library_exposes_full_recordings_for_playback_download_and_delete(
     session, media_path = _create_available_recording()
     try:
         assert client.get("/owner/recordings").status_code == 401
-        response = client.get("/owner/recordings", headers=owner_headers())
+        headers = owner_headers()
+        assert client.delete("/owner/fields/field-01", headers=headers).status_code == 204
+
+        response = client.get("/owner/recordings", headers=headers)
         assert response.status_code == 200
         item = response.json()["items"][0]
         assert item["title"] == "Partido completo"
@@ -231,7 +237,7 @@ def test_owner_library_exposes_full_recordings_for_playback_download_and_delete(
         assert download.status_code == 200
         assert download.headers["content-disposition"].startswith("attachment")
 
-        deleted = client.delete(f"/owner/recordings/{item['id']}", headers=owner_headers())
+        deleted = client.delete(f"/owner/recordings/{item['id']}", headers=headers)
         assert deleted.status_code == 204
         assert not media_path.exists()
         assert client.get("/owner/recordings", headers=owner_headers()).json()["items"] == []

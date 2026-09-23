@@ -89,7 +89,7 @@ export function CourtsPage({ console: data }: { console: OwnerConsole }) {
             </EmptyState>
           </div>
         ) : (
-          <div className="card__pad">
+          <div className="card__pad courts-empty-wrap">
             <EmptyState
               icon="camera"
               accent="volt"

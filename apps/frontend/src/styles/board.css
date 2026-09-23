@@ -123,6 +123,10 @@
 }
 .row-legend span:first-child { grid-column: 1 / span 2; }
 
+.card__pad.courts-empty-wrap {
+  padding-top: var(--space-5);
+}
+
 .row-list { display: flex; flex-direction: column; }
 
 .row {
