@@ -24,7 +24,7 @@ class WatermarkRequest:
 WATERMARK_FILTER = (
     "[1:v]format=rgba,colorchannelmixer=aa=0.82[mark];"
     "[mark][0:v]scale2ref=w=trunc(main_w*0.18/2)*2:h=-1[wm][base];"
-    "[base][wm]overlay=x=W-w-W*0.025:y=H-h-H*0.035:format=auto[v]"
+    "[base][wm]overlay=x=W-w-W*0.025:y=H-h-H*0.035:format=auto:shortest=1:eof_action=endall[v]"
 )
 
 

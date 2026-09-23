@@ -31,5 +31,6 @@ def test_watermarked_highlight_is_baked_with_h264_instead_of_stream_copy(tmp_pat
 
     assert "-filter_complex" in command
     assert "overlay=" in command[command.index("-filter_complex") + 1]
+    assert "shortest=1" in command[command.index("-filter_complex") + 1]
     assert command[command.index("-c:v") + 1] == "libx264"
     assert "copy" not in command
