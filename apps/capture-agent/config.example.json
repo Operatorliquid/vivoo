@@ -1,5 +1,5 @@
 {
-  "cloud_api_url": "http://54.232.8.119/api",
+  "cloud_api_url": "http://54.20.149.161/api",
   "agent_token": "PEGAR_TOKEN_DE_VINCULACION_GENERADO_EN_CANCHAS",
   "storage_dir": "~/.courtvision/media",
   "heartbeat_seconds": 30,

@@ -7,7 +7,7 @@ const http = require('node:http');
 const https = require('node:https');
 const path = require('node:path');
 
-const DASHBOARD_URL = process.env.COURTVISION_DASHBOARD_URL || 'http://54.232.8.119';
+const DASHBOARD_URL = process.env.COURTVISION_DASHBOARD_URL || 'http://54.20.149.161';
 const LOCAL_DASHBOARD_PORT = 8780;
 const LOCAL_RELAY_URL = 'rtsp://127.0.0.1:8554/courtvision';
 const managed = new Map();
