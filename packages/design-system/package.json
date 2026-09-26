@@ -12,7 +12,7 @@
     "./components.css": "./src/components.css"
   },
   "dependencies": {
-    "lucide-react": "1.39.0"
+    "lucide-react": "1.43.0"
   },
   "peerDependencies": {
     "react": "^19.1.0",
