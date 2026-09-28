@@ -16,6 +16,9 @@ fs.rmSync(outputRoot, { recursive: true, force: true });
 const args = [
   'exec', 'electron-builder', '--mac', 'dmg', 'zip',
   `--config.directories.output=${outputRoot}`,
+  `--config.icon=${path.join(desktopRoot, 'build/icon.png')}`,
+  `--config.mac.entitlements=${path.join(desktopRoot, 'build/entitlements.mac.plist')}`,
+  `--config.mac.entitlementsInherit=${path.join(desktopRoot, 'build/entitlements.mac.plist')}`,
 ];
 if (!process.env.CSC_LINK && !process.env.CSC_NAME) {
   args.push('--config.mac.identity=-');
