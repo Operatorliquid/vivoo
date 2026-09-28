@@ -1,6 +1,6 @@
 {
   "name": "courtvision-desktop",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "Aplicación local de captura y detección para clubes vivoo",
   "author": "vivoo",
   "private": true,
@@ -42,7 +42,7 @@
     "update:stage": "node scripts/stage-update.cjs",
     "package": "electron-builder --dir",
     "dist:mac": "node scripts/build-mac.cjs",
-    "dist:win": "electron-builder --win nsis"
+    "dist:win": "electron-builder --win nsis --publish never"
   },
   "dependencies": {
     "electron-updater": "^6.6.2"

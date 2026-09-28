@@ -15,6 +15,7 @@ fs.rmSync(outputRoot, { recursive: true, force: true });
 
 const args = [
   'exec', 'electron-builder', '--mac', 'dmg', 'zip',
+  '--publish', 'never',
   `--config.directories.output=${outputRoot}`,
   `--config.icon=${path.join(desktopRoot, 'build/icon.png')}`,
   `--config.mac.entitlements=${path.join(desktopRoot, 'build/entitlements.mac.plist')}`,
