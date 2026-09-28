@@ -62,12 +62,16 @@ pnpm --dir apps/desktop dist:mac # o dist:win en Windows
 
 El build descarga MediaMTX desde su release fijado y valida SHA-256. El modelo
 de pose, FFmpeg y FFprobe se incluyen como recursos de la aplicación.
+El empaquetador de macOS construye fuera de carpetas sincronizadas por iCloud,
+valida la firma profunda y recién entonces copia los artefactos a `dist/`.
 
 ## Actualizaciones automáticas
 
-vivoo consulta el canal de actualizaciones al iniciar y cada seis horas. Descarga
-la nueva versión en segundo plano y la instala automáticamente cuando ninguna
-cámara está grabando; nunca corta un partido en curso.
+vivoo consulta el canal HTTPS de GitHub Releases al iniciar y cada seis horas.
+Si no tiene conexión, reintenta con backoff desde los 15 minutos. Descarga la
+nueva versión en segundo plano y la instala automáticamente cuando ninguna
+cámara está grabando; vuelve a comprobarlo justo antes de reiniciar para no
+cortar un partido que haya comenzado durante la espera.
 
 Después de generar un instalador, preparar el canal que sirve el dashboard:
 
@@ -81,18 +85,19 @@ sincroniza ese directorio y Nginx lo publica en `/desktop-updates/`. Para usar
 otro canal, definir `COURTVISION_UPDATE_URL` al empaquetar o ejecutar vivoo.
 
 Al publicar una etiqueta `desktop-v*`, GitHub Actions construye macOS y Windows
-en sus sistemas nativos. Primero publica instaladores y `blockmap`; los
-manifiestos se publican al final para que ningún cliente reciba una actualización
-incompleta. El repositorio necesita los secretos `DESKTOP_UPDATE_HOST`,
-`DESKTOP_UPDATE_USER`, `DESKTOP_UPDATE_SSH_KEY` y
-`DESKTOP_UPDATE_KNOWN_HOSTS`.
+en sus sistemas nativos y crea una GitHub Release con instaladores, manifiestos
+y `blockmap`. El canal antiguo del servidor también se actualiza durante la
+transición para que las instalaciones 0.9.1 puedan migrar sin reinstalar. Esa
+copia requiere los secretos `DESKTOP_UPDATE_HOST`, `DESKTOP_UPDATE_USER`,
+`DESKTOP_UPDATE_SSH_KEY` y `DESKTOP_UPDATE_KNOWN_HOSTS`.
 
 ## Firma para distribución
 
-Los pilotos internos pueden usar builds sin firmar. Para entregar el producto
-a clientes, macOS requiere certificado Developer ID y notarización; Windows,
-un certificado de firma de código. Las credenciales se inyectan únicamente en
-CI y nunca se guardan en el repositorio.
+Los pilotos internos de macOS reciben una firma ad-hoc completa y validada, que
+permite comprobar el actualizador sin volver a producir el error de recursos sin
+sellar. Para entregar el producto a clientes, macOS requiere certificado
+Developer ID y notarización; Windows, un certificado de firma de código. Las
+credenciales se inyectan únicamente en CI y nunca se guardan en el repositorio.
 
 La URL del dashboard puede cambiarse con `COURTVISION_DASHBOARD_URL`; el agente
 siempre escucha solo en loopback y no publica la cámara en internet.

@@ -1,6 +1,6 @@
 {
   "name": "courtvision-desktop",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "Aplicación local de captura y detección para clubes vivoo",
   "author": "vivoo",
   "private": true,
@@ -10,10 +10,11 @@
     "productName": "vivoo",
     "icon": "build/icon.png",
     "asar": true,
+    "afterPack": "scripts/after-pack.cjs",
     "files": ["src/**/*", "build/icon.png", "package.json"],
     "extraResources": [{ "from": "runtime", "to": "runtime" }],
     "artifactName": "vivoo-${version}-${os}-${arch}.${ext}",
-    "publish": [{ "provider": "generic", "url": "https://updates.invalid/vivoo" }],
+    "publish": [{ "provider": "github", "owner": "Operatorliquid", "repo": "vivoo", "releaseType": "release" }],
     "mac": {
       "target": ["dmg", "zip"],
       "category": "public.app-category.business",
@@ -40,7 +41,7 @@
     "agent:package": "python3 scripts/build-agent.py",
     "update:stage": "node scripts/stage-update.cjs",
     "package": "electron-builder --dir",
-    "dist:mac": "electron-builder --mac dmg zip",
+    "dist:mac": "node scripts/build-mac.cjs",
     "dist:win": "electron-builder --win nsis"
   },
   "dependencies": {

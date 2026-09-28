@@ -57,7 +57,11 @@ jobs:
             echo "CSC_KEY_PASSWORD=$VIVOO_CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
           else
             echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
-            echo "No signing certificate configured; building an unsigned test installer."
+            if [[ "${{ runner.os }}" == "macOS" ]]; then
+              echo "No Developer ID configured; sealing the pilot build with a complete ad-hoc signature."
+            else
+              echo "No signing certificate configured; building an unsigned Windows pilot installer."
+            fi
           fi
       - run: pnpm install --frozen-lockfile
       - run: uv python install 3.12
@@ -98,12 +102,26 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/desktop-v')
     needs: installer
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: vivoo-desktop-*
           path: /tmp/vivoo-release
           merge-multiple: true
+      - name: Publish HTTPS update channel on GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          RELEASE_DIR=/tmp/vivoo-release/apps/desktop/dist
+          test -d "$RELEASE_DIR"
+          mapfile -t RELEASE_FILES < <(find "$RELEASE_DIR" -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' -o -name 'latest*.yml' \) -print)
+          test "${#RELEASE_FILES[@]}" -gt 0
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --verify-tag --latest --title "vivoo ${GITHUB_REF_NAME#desktop-v}" --notes "Actualización automática de vivoo para macOS y Windows."
+          gh release upload "$GITHUB_REF_NAME" "${RELEASE_FILES[@]}" --clobber
       - name: Configure authenticated deployment
         id: deploy-config
         env:

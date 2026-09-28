@@ -15,6 +15,7 @@ let quitting = false;
 let logPath;
 let dashboardProxy;
 let updateInstallTimer;
+let updateCheckTimer;
 let watchdogTimer;
 let powerBlockerId;
 let mainWindow;
@@ -193,6 +194,7 @@ function stopServices() {
   managed.clear();
   dashboardProxy?.close();
   if (updateInstallTimer) clearTimeout(updateInstallTimer);
+  if (updateCheckTimer) clearTimeout(updateCheckTimer);
   if (watchdogTimer) clearInterval(watchdogTimer);
   if (Number.isInteger(powerBlockerId) && powerSaveBlocker.isStarted(powerBlockerId)) {
     powerSaveBlocker.stop(powerBlockerId);
@@ -290,29 +292,62 @@ async function migrateLegacyCameraServices() {
 function startAutomaticUpdates() {
   if (!app.isPackaged) return;
   const { autoUpdater } = require('electron-updater');
-  const updateBase = process.env.COURTVISION_UPDATE_URL
-    || `${DASHBOARD_URL.replace(/\/$/, '')}/desktop-updates/${process.platform}/${process.arch}`;
-  autoUpdater.setFeedURL({ provider: 'generic', url: updateBase });
+  const explicitUpdateUrl = process.env.COURTVISION_UPDATE_URL?.trim();
+  const updateFeed = explicitUpdateUrl
+    ? { provider: 'generic', url: explicitUpdateUrl }
+    : { provider: 'github', owner: 'Operatorliquid', repo: 'vivoo' };
+  autoUpdater.setFeedURL(updateFeed);
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  log(`Canal de actualización: ${explicitUpdateUrl || 'GitHub Releases'}`);
   autoUpdater.on('error', (error) => log(`Actualización: ${error.message}`));
   autoUpdater.on('update-available', (info) => log(`Actualización ${info.version} disponible`));
   autoUpdater.on('update-not-available', () => log('vivoo está actualizado'));
   autoUpdater.on('update-downloaded', (info) => {
     log(`Actualización ${info.version} descargada; esperando una pausa segura`);
+    if (updateInstallTimer) clearTimeout(updateInstallTimer);
     const installWhenSafe = async () => {
       if (hasActiveRecording(await localAgentStatus())) {
         updateInstallTimer = setTimeout(installWhenSafe, 60_000);
         return;
       }
-      log(`Instalando actualización ${info.version}`);
-      updateInstallTimer = setTimeout(() => autoUpdater.quitAndInstall(false, true), 3000);
+      updateInstallTimer = setTimeout(async () => {
+        if (hasActiveRecording(await localAgentStatus())) {
+          log(`Actualización ${info.version} diferida: comenzó una grabación`);
+          void installWhenSafe();
+          return;
+        }
+        log(`Instalando actualización ${info.version}`);
+        autoUpdater.quitAndInstall(false, true);
+      }, 5_000);
     };
     void installWhenSafe();
   });
-  const check = () => autoUpdater.checkForUpdates().catch((error) => log(`Actualización: ${error.message}`));
-  setTimeout(check, 15_000);
-  setInterval(check, 6 * 60 * 60 * 1000).unref();
+
+  let checkInFlight = false;
+  let consecutiveFailures = 0;
+  const scheduleCheck = (delay) => {
+    if (updateCheckTimer) clearTimeout(updateCheckTimer);
+    updateCheckTimer = setTimeout(check, delay);
+    updateCheckTimer.unref();
+  };
+  const check = async () => {
+    if (checkInFlight || quitting) return;
+    checkInFlight = true;
+    try {
+      await autoUpdater.checkForUpdates();
+      consecutiveFailures = 0;
+      scheduleCheck(6 * 60 * 60 * 1000);
+    } catch (error) {
+      consecutiveFailures += 1;
+      const retryDelay = Math.min(15 * 60 * 1000 * (2 ** (consecutiveFailures - 1)), 6 * 60 * 60 * 1000);
+      log(`Próximo intento de actualización en ${Math.round(retryDelay / 60_000)} minutos: ${error.message}`);
+      scheduleCheck(retryDelay);
+    } finally {
+      checkInFlight = false;
+    }
+  };
+  scheduleCheck(15_000);
 }
 
 function startDashboardProxy() {
