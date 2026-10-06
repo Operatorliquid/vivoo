@@ -86,10 +86,8 @@ otro canal, definir `COURTVISION_UPDATE_URL` al empaquetar o ejecutar vivoo.
 
 Al publicar una etiqueta `desktop-v*`, GitHub Actions construye macOS y Windows
 en sus sistemas nativos y crea una GitHub Release con instaladores, manifiestos
-y `blockmap`. El canal antiguo del servidor también se actualiza durante la
-transición para que las instalaciones 0.9.1 puedan migrar sin reinstalar. Esa
-copia requiere los secretos `DESKTOP_UPDATE_HOST`, `DESKTOP_UPDATE_USER`,
-`DESKTOP_UPDATE_SSH_KEY` y `DESKTOP_UPDATE_KNOWN_HOSTS`.
+y `blockmap`. Las versiones nuevas usan GitHub Releases como canal canónico. El
+servidor conserva únicamente el puente de transición para instalaciones 0.9.1.
 
 ## Firma para distribución
 
