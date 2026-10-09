@@ -1,4 +1,4 @@
-{$SITE_ADDRESS}, http://54.20.149.161 {
+{$SITE_ADDRESS}, http://{$SERVER_PUBLIC_IP} {
 	encode zstd gzip
 
 	header {

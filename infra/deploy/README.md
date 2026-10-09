@@ -5,6 +5,14 @@ configurado y enruta el dashboard hacia Nginx/FastAPI. Antes de iniciar, el DNS
 del dominio debe apuntar al servidor y los puertos TCP 80/443 (y UDP 443 para
 HTTP/3) deben estar permitidos.
 
+`SERVER_PUBLIC_IP` debe contener la Elastic IP de la instancia. Permite atender
+temporalmente por HTTP directo durante una migración sin volver a incrustar una
+dirección en el Caddyfile.
+
+Los hashes scrypt de las cuentas iniciales contienen caracteres `$`. En `.env`
+deben escribirse entre comillas simples, como muestra `.env.example`, para que
+Docker Compose no los interprete como variables y trunque las credenciales.
+
 ```bash
 docker compose --env-file .env -f infra/deploy/compose.yml up -d --build
 ```

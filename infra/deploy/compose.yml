@@ -155,6 +155,7 @@ services:
       - web
     environment:
       SITE_ADDRESS: ${PUBLIC_BASE_URL:?PUBLIC_BASE_URL must be set}
+      SERVER_PUBLIC_IP: ${SERVER_PUBLIC_IP:?SERVER_PUBLIC_IP must be set}
       S3_MEDIA_ORIGIN: https://${AWS_S3_MEDIA_BUCKET:-media.invalid}.s3.amazonaws.com
     ports:
       - "80:80"
