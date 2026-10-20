@@ -2,7 +2,7 @@
 name = "courtvision-api"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["fastapi>=0.115", "uvicorn[standard]>=0.34", "pydantic>=2.10", "psycopg[binary]>=3.2", "boto3>=1.40", "cryptography>=45.0"]
+dependencies = ["fastapi>=0.115", "uvicorn[standard]>=0.34", "pydantic>=2.13.5", "psycopg[binary]>=3.2", "boto3>=1.40", "cryptography>=45.0"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
